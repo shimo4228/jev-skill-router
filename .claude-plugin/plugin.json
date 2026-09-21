@@ -1,7 +1,7 @@
 {
   "name": "jev-skill-router",
   "description": "A UserPromptSubmit hook that asks TypeSafe Jev which of your installed skills fits the prompt — two typed requests over the whole roster (user, plugin and project skills), at most one skill name back. Runs in shadow mode by default: it records what it would have suggested to a JSONL decision log and injects nothing, so you can measure the recipe before letting it speak.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "shimo4228",
     "url": "https://github.com/shimo4228"

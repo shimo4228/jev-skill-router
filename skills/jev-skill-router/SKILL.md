@@ -85,13 +85,18 @@ Every failure path exits 0. A routing problem costs a log line, never a turn.
 
 ## How a decision is made
 
-1. **Wide.** One `Choice` over the whole roster (name + first 60 characters of each
-   description) and three `Noul` questions about the request itself — does it act on the user's
-   system, would an expert follow a documented procedure, would prose alone suffice (inverted).
-   Their mean is the gate; under 0.30 the hook stops: no skill needed, no second request.
-2. **Narrow.** The top 3 go back with full descriptions and the first 700 characters of each
-   SKILL.md: one `Choice`, plus one `Noul` per candidate — does this skill do the specific thing
-   asked? If the best fit is under 0.30, nothing is suggested.
+1. **Wide.** One `Choice` over the whole roster (each skill's name and its whole description)
+   and three `Noul` questions about the request itself — does it act on the user's system,
+   would an expert follow a documented procedure, would prose alone suffice (inverted). Their
+   mean is the gate; under 0.30 the hook stops: no skill needed, no second request.
+2. **Narrow.** The top 3 go back with their whole description and their whole SKILL.md body:
+   one `Choice`, plus one `Noul` per candidate — does this skill do the specific thing asked?
+   If the best fit is under 0.30, nothing is suggested.
+
+Nothing is truncated on the way out. The cookbook this is ported from cuts each description to
+60 characters because that is the width its own agent displays; Claude Code puts the whole
+description in the model's context, so ranking on a prefix would rank on less than the agent
+sees. On this machine's 59-skill roster, two descriptions fit in 60 characters (2026-09-21).
 
 Rosters over 240 skills are split into chunks (the API caps one question at 255 choices); each
 chunk carries a `none_of_these` option and nominates nobody when that option reaches 0.50 —
@@ -121,9 +126,13 @@ roster discovery; the log location follows `HOME` and `JEV_ROUTER_LOG` only.
 ## What leaves the machine
 
 Each routed prompt sends to `https://api.typesafe.ai`: the full prompt text, every roster
-skill's name and 60-character description, and — for the top 3 only — the full description and
-the first 700 characters of SKILL.md. Conversation history, files, tool output and the key file's
-path are never sent.
+skill's name and whole description, and — for the top 3 only — **the whole text of their
+SKILL.md**, including skills that live in a private project's `.claude/skills/`. Conversation
+history, files, tool output and the key file's path are never sent.
+
+A skill directory may be a symlink and is followed, so a `SKILL.md` that points elsewhere
+sends the contents of whatever it points at. In a repo you did not write, treat
+`.claude/skills/` as part of what a routed prompt can send.
 
 **A secret pasted into a prompt is sent as typed.** There is no scrubbing step. Unattended
 sessions (cron, launchd, `claude -p`) are routed like interactive ones unless they set
@@ -160,6 +169,11 @@ used, skill used but no suggestion. A missing log means unmeasured, never zero s
   hook input), cannot be suggested.
 - Thresholds are uncalibrated for your roster and language. TypeSafe documents that CJK input is
   not at parity with English.
+- Jev takes 64k tokens per request, and 32k for `state` plus the longest question. Two inputs
+  can reach that: three unusually long SKILL.md files in one shortlist, and — on a roster past
+  the 240-skill chunk size — a wide question carrying that many whole descriptions. Nothing
+  measures the request beforehand: the API answers with an error, the turn passes with no
+  suggestion, and the log row carries the reason.
 - The 4xx/5xx error body shape is read defensively and has not been observed live; the success
   path was confirmed against the live API on 2026-09-21.
 

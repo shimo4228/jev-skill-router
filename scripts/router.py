@@ -3,7 +3,17 @@
 Ported from the TypeSafe cookbook "Skill suggestion"
 (https://docs.typesafe.ai/cookbooks/skill_suggestion.md, retrieved 2026-09-21). The question
 text, the state shape, the two-call structure and both thresholds are the cookbook's; the
-chunking and the margin rule are not (see below).
+chunking, the margin rule and the full-text inputs are not (see below).
+
+The cookbook cuts each description to 60 characters because that is the width Hermes, the
+agent it was written against, shows in its own index — the point was to let the cheap pass
+read exactly what the agent reads. Claude Code shows the whole description, so this router
+sends the whole description, and the whole SKILL.md body for the three candidates the second
+request judges. Jev's input budget (64k tokens per request, 32k for ``state`` plus the
+longest question — https://docs.typesafe.ai/models.md, retrieved 2026-09-21) is therefore
+reachable on a shortlist of unusually long skills. Nothing here measures the request first:
+the API is the authority on its own limit, and an over-limit request comes back an error that
+the caller's fail-open turns into one logged row and a silent turn.
 
 Every question string and threshold in this module is a *measured input*, not prose: editing
 one changes the distribution the decision log records. That is what ``QUESTION_HASH`` is for
@@ -24,7 +34,10 @@ from scripts.roster import Skill
 #: Pinned, never read from the environment. An alias would let the answers move under a
 #: logged threshold without any change on this side (https://docs.typesafe.ai/models.md).
 MODEL = "jev-1.13.0"
-ROUTER_VERSION = "0.1.0"
+#: Bumped whenever the router changes what it asks about, not only how it asks: 0.2.0 sends
+#: whole descriptions and whole bodies where 0.1.0 sent 60- and 700-character prefixes, and a
+#: reader joining rows across that change would otherwise average two distributions.
+ROUTER_VERSION = "0.2.0"
 
 SHORTLIST = 3
 GATE_THRESHOLD = 0.30
@@ -180,7 +193,8 @@ def rank_wide(
     deadline: float | None = None,
     usage: dict[str, int] | None = None,
 ) -> dict:
-    """Request 1: rank the roster and score the request for whether a skill applies at all.
+    """Request 1: rank the whole roster on full descriptions, and score the request for
+    whether a skill applies at all.
 
     Over the 255-choice cap the roster is asked in chunks. Each chunk then also offers
     ``none_of_these``, and a chunk whose P(none) reaches ``NONE_THRESHOLD`` nominates
@@ -203,7 +217,7 @@ def rank_wide(
         left = _time_left(deadline)
         if left < MIN_REQUEST_S and index > 0:
             break  # out of budget: rank on the chunks already answered
-        criteria = {skill.name: skill.index_description for skill in group}
+        criteria = {skill.name: skill.description for skill in group}
         if chunked:
             criteria[NONE_OPTION] = NONE_CRITERIA
         questions: dict[str, dict] = {
@@ -255,7 +269,8 @@ def rerank(
     timeout: float = DEFAULT_BUDGET_S,
     usage: dict[str, int] | None = None,
 ) -> dict:
-    """Request 2: the same Choice over the shortlist, plus one absolute noul per candidate.
+    """Request 2: the same Choice over the shortlist — each candidate's full description and
+    full SKILL.md body — plus one absolute noul per candidate.
 
     Each ``fits`` noul is answered on its own, so they can all come back low and the whole
     shortlist can be dropped — which is the only way this recipe stays quiet on a turn where
@@ -293,6 +308,18 @@ def rerank(
     return {"winner": winner, "fits": fits}
 
 
+def _named(name: str) -> str:
+    """A fits key as it may be written into the decision log.
+
+    The ``fits::`` keys are fields of an HTTP response body and are not held to the menu that
+    was sent — only ``choice`` is. The fits leader's name is printed into ``reason``, so a
+    response could otherwise put an arbitrary, arbitrarily long string into a file a later
+    reader parses. Bounded and repr'd, the same way ``route.py`` handles an off-menu
+    suggestion.
+    """
+    return repr(name[:60])
+
+
 def _decide(
     winner: str | None, fits: Mapping[str, float], threshold: float, margin: float | None
 ) -> tuple[str | None, str]:
@@ -308,16 +335,28 @@ def _decide(
     ranked = sorted(fits.items(), key=lambda kv: (-kv[1], kv[0]))
     best_name, best_fits = ranked[0]
     if best_fits < threshold:
-        return None, f"best fits {best_name} {best_fits:.2f} < {threshold:.2f}: nothing fits"
+        return (
+            None,
+            f"best fits {_named(best_name)} {best_fits:.2f} < {threshold:.2f}: nothing fits",
+        )
     if winner is None:
-        return best_name, f"no Choice winner; fits leader {best_name} {best_fits:.2f}"
+        return best_name, f"no Choice winner; fits leader {_named(best_name)} {best_fits:.2f}"
     winner_fits = fits.get(winner, 0.0)
     if margin is not None and best_name != winner and best_fits - winner_fits >= margin:
         return best_name, (
-            f"fits override: {best_name} {best_fits:.2f} leads winner {winner} "
+            f"fits override: {_named(best_name)} {best_fits:.2f} leads winner {winner} "
             f"{winner_fits:.2f} by {best_fits - winner_fits:.2f}"
         )
-    return winner, f"shortlist winner with best fits {best_fits:.2f}"
+    # The number in the reason is the *suggested* skill's own fits. Quoting the best fits here
+    # put a figure belonging to a candidate that lost beside the name of the one that won
+    # (observed live: winner at 0.40, reason reading 0.63), which reads as evidence for a
+    # choice it had nothing to do with. When the two signals split, both are named.
+    if best_name == winner:
+        return winner, f"shortlist winner {winner} (fits {winner_fits:.2f})"
+    return winner, (
+        f"choice winner {winner} (fits {winner_fits:.2f}); "
+        f"best fits {_named(best_name)} {best_fits:.2f}"
+    )
 
 
 def suggest(

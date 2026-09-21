@@ -1,6 +1,6 @@
 [project]
 name = "jev-skill-router"
-version = "0.1.0"
+version = "0.2.0"
 description = "UserPromptSubmit hook for Claude Code that ranks the whole skill roster with two TypeSafe Jev requests and suggests at most one skill."
 requires-python = ">=3.10"
 # runtime は stdlib のみ。公開物として他人の環境でそのまま動くことが要件なので、

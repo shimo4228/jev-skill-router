@@ -24,14 +24,14 @@ To run it without the plugin system, see the manual wiring in [the operating man
 
 ## How it decides
 
-The recipe is TypeSafe's published [skill suggestion cookbook](https://docs.typesafe.ai/cookbooks/skill_suggestion), ported to a Claude Code hook. Question text and thresholds are copied from it and kept as constants in one file.
+The recipe is TypeSafe's published [skill suggestion cookbook](https://docs.typesafe.ai/cookbooks/skill_suggestion), ported to a Claude Code hook. Question text and thresholds are copied from it and kept as constants in one file. The cookbook's 60-character index is not copied: that width is what the agent it was written against shows in its own skill index, while Claude Code shows the model the whole description. Ranking on a prefix would rank on less than the agent already sees, so nothing is truncated here.
 
-1. **Wide.** One request ranks the whole roster by name and the first 60 characters of each description, and asks three yes/no questions about the prompt itself: does it act on the user's system, would an expert follow a documented procedure, would prose alone be enough. If their mean is under 0.30, the hook stops. No skill is needed and no second request is spent.
-2. **Narrow.** The top three go back with their full descriptions and the first 700 characters of each `SKILL.md`. The model picks one, and answers one more question per candidate: does this skill do the specific thing asked? If the best answer is under 0.30, nothing is suggested.
+1. **Wide.** One request ranks the whole roster by name and whole description, and asks three yes/no questions about the prompt itself: does it act on the user's system, would an expert follow a documented procedure, would prose alone be enough. If their mean is under 0.30, the hook stops. No skill is needed and no second request is spent.
+2. **Narrow.** The top three go back with their whole description and the whole body of their `SKILL.md`. The model picks one, and answers one more question per candidate: does this skill do the specific thing asked? If the best answer is under 0.30, nothing is suggested.
 
 The roster is built from three places: your user skills, the skills of plugins that are enabled in your settings, and project skills found from the session's working directory up to the git root. Skills marked `disable-model-invocation: true` are left out. The hook never edits the skill list Claude Code puts in the model's context. It only adds the one block shown below, so prompt caching over that list is unaffected.
 
-Every failure exits 0: a missing key, a timeout or an API error costs one log line, never a turn. In `shadow` mode the hook hands the work to a detached child process and returns at once, so the turn is not delayed. `inject` mode has to wait for the answer and works under a 3 second wall-clock budget across all requests; the three live decisions made on 2026-09-21 took 0.5 to 1.3 seconds.
+Every failure exits 0: a missing key, a timeout or an API error costs one log line, never a turn. In `shadow` mode the hook hands the work to a detached child process and returns at once, so the turn is not delayed. `inject` mode has to wait for the answer and works under a 3 second wall-clock budget across all requests; the three live decisions made on 2026-09-21, on 0.1.0 with its truncated inputs, took 0.5 to 1.3 seconds. 0.2.0 sends more text per request and has not been timed yet.
 
 ## What one decision looks like
 
@@ -55,7 +55,9 @@ Relevant to the current request: adr-writer. Ignore this if it does not fit what
 
 ## What leaves your machine
 
-Each routed prompt sends to `api.typesafe.ai`: the full prompt text, every roster skill's name and 60-character description, and, for the top three only, the full description and the first 700 characters of `SKILL.md`. Conversation history, your project files and tool output are never sent.
+Each routed prompt sends to `api.typesafe.ai`: the full prompt text, every roster skill's name and whole description, and, for the top three only, **the whole text of their `SKILL.md`** — including skills that live in a private project's `.claude/skills/`. Conversation history, your project files and tool output are never sent.
+
+A skill directory may be a symlink and is followed, so a `SKILL.md` that points elsewhere sends the contents of whatever it points at. In a repository you did not write, treat `.claude/skills/` as part of what a routed prompt can send.
 
 **A secret pasted into a prompt is sent as typed.** There is no scrubbing step. The endpoint host is pinned in code and redirects are refused, so an environment variable cannot send your key or prompt to another host.
 
@@ -65,7 +67,8 @@ Each routed prompt sends to `api.typesafe.ai`: the full prompt text, every roste
 - This repository has no effectiveness numbers of its own yet. The cookbook reports the vendor's experiment, including cases where the suggestion broke a turn the agent had been getting right. Treat it as the direction on their roster, not a result on yours.
 - Skills that are built in, with no `SKILL.md` on disk, and skills under `--add-dir` directories cannot be suggested.
 - Prompts starting with `/` and prompts over 4000 characters are skipped.
-- TypeSafe is a paid third-party API and every routed prompt costs one or two requests. With a 50-skill roster the live decisions above used about 2,400 input tokens when the first step stopped and 4,200 to 4,800 when both steps ran. Check [TypeSafe's pricing](https://docs.typesafe.ai/models) for current rates and limits; this README does not quote them because they change.
+- Jev takes 64k tokens per request, and 32k for the state plus the longest question. Two inputs can reach that: three unusually long `SKILL.md` files in one shortlist, and a roster past the 240-skill chunk size, whose wide question carries that many whole descriptions. Nothing measures the request beforehand — the API answers with an error, the turn passes with no suggestion, and the log row carries the reason.
+- TypeSafe is a paid third-party API and every routed prompt costs one or two requests. In 0.1.0, which sent truncated text, a 50-skill roster used about 2,400 input tokens when the first step stopped and 4,200 to 4,800 when both steps ran. 0.2.0 sends more and has not been measured yet. Check [TypeSafe's pricing](https://docs.typesafe.ai/models) for current rates and limits; this README does not quote them because they change.
 
 ## Reading your own log
 

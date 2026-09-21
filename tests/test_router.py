@@ -25,9 +25,8 @@ def skills(*names: str) -> list[Skill]:
         Skill(
             name=n,
             source="user",
-            path=f"/tmp/{n}/SKILL.md",
+            path=f"/skills/{n}/SKILL.md",
             description=f"{n} full description",
-            index_description=f"{n} short",
             body=f"# {n}",
         )
         for n in names
@@ -132,6 +131,72 @@ def test_fits_margin_is_off_by_default():
         ScriptedClient(list(responses)), "do the thing", roster, fits_margin=0.15
     )
     assert overridden.name == "beta"
+
+
+def test_reason_reports_the_fits_of_the_skill_that_was_actually_suggested():
+    """Observed live: the row said "best fits 0.63" beside a suggestion whose own fits was
+    0.40 — the 0.63 belonged to the candidate that was *not* chosen. A reason that quotes a
+    number about a different skill is worse than no number, because it reads as evidence."""
+    roster = skills("alpha", "beta", "gamma")
+    client = ScriptedClient(
+        [
+            wide_response({"alpha": 0.5, "beta": 0.3, "gamma": 0.2}, PASSING_GATE),
+            rerank_response(
+                {"alpha": 0.6, "beta": 0.3, "gamma": 0.1},
+                {"alpha": 0.40, "beta": 0.63, "gamma": 0.01},
+            ),
+        ]
+    )
+
+    result = router_mod.suggest(client, "do the thing", roster)
+
+    assert result.name == "alpha"  # the Choice winner still decides; margin stays off
+    assert "alpha" in result.reason and "0.40" in result.reason
+    assert "beta" in result.reason and "0.63" in result.reason  # the split is named, not hidden
+
+
+def test_a_fits_key_the_api_invented_cannot_fill_the_reason_line():
+    """`fits::<name>` keys come out of the same HTTP body as `choice`, and the reason line
+    names the fits leader. Unbounded, a response could write an arbitrary, arbitrarily long
+    string into the decision log a later reader parses."""
+    roster = skills("alpha", "beta", "gamma")
+    injected = "EVIL\n" + "A" * 300
+    client = ScriptedClient(
+        [
+            wide_response({"alpha": 0.5, "beta": 0.3, "gamma": 0.2}, PASSING_GATE),
+            rerank_response(
+                {"alpha": 0.6, "beta": 0.3, "gamma": 0.1},
+                {"alpha": 0.40, "beta": 0.10, injected: 0.99},
+            ),
+        ]
+    )
+
+    result = router_mod.suggest(client, "do the thing", roster)
+
+    assert result.name == "alpha"  # the suggestion is still a name the local roster holds
+    assert injected not in result.reason
+    assert "\n" not in result.reason
+    assert len(result.reason) < 150
+
+
+def test_reason_when_the_choice_winner_is_also_the_best_fit():
+    roster = skills("alpha", "beta", "gamma")
+    client = ScriptedClient(
+        [
+            wide_response({"alpha": 0.5, "beta": 0.3, "gamma": 0.2}, PASSING_GATE),
+            rerank_response(
+                {"alpha": 0.6, "beta": 0.3, "gamma": 0.1},
+                {"alpha": 0.77, "beta": 0.20, "gamma": 0.01},
+            ),
+        ]
+    )
+
+    result = router_mod.suggest(client, "do the thing", roster)
+
+    assert result.name == "alpha"
+    assert "winner" in result.reason
+    assert "alpha" in result.reason and "0.77" in result.reason
+    assert "beta" not in result.reason  # nothing to disclose: the two signals agree
 
 
 def test_budget_is_wall_clock_across_both_requests(monkeypatch):

@@ -201,21 +201,14 @@ def test_nearest_project_skills_dir_wins(skill_tree):
     assert shared[0].description == "the inner copy"
 
 
-def test_index_description_is_truncated_and_body_excerpted(skill_tree):
-    write_skill(
-        skill_tree["user"],
-        "long-one",
-        description="x" * 200,
-        body="# long-one\n" + ("y" * 2000),
-    )
+def test_description_and_body_are_kept_whole(skill_tree):
+    body = "# long-one\n" + ("y" * 2000)
+    write_skill(skill_tree["user"], "long-one", description="x" * 200, body=body)
 
-    skill = next(
-        s for s in build(skill_tree, index_chars=60, excerpt_chars=700) if s.name == "long-one"
-    )
+    skill = next(s for s in build(skill_tree) if s.name == "long-one")
 
-    assert len(skill.index_description) <= 60
     assert len(skill.description) == 200
-    assert len(skill.body) <= 700
+    assert skill.body == body.strip()
 
 
 def test_roster_hash_is_stable_and_order_independent(skill_tree):

@@ -32,11 +32,6 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-#: Characters of description the wide Choice question sees per skill. Claude Code truncates
-#: its own index; matching that width keeps the cheap pass reading what the agent reads.
-INDEX_CHARS = 60
-#: Characters of SKILL.md body each shortlisted candidate carries into the second request.
-EXCERPT_CHARS = 700
 #: This router never suggests itself.
 SELF_NAME = "jev-skill-router"
 #: The router's own root, used to exclude its SKILL.md by path as well as by name.
@@ -73,13 +68,19 @@ _MAX_PROJECT_LEVELS = 24
 
 @dataclass(frozen=True)
 class Skill:
-    """One roster entry, in the shape both Jev questions consume."""
+    """One roster entry, in the shape both Jev questions consume.
+
+    ``description`` and ``body`` are whole. The cookbook's 60-character index was the display
+    width of the agent it was written against; Claude Code puts the entire description in the
+    model's context, so a router that ranks on a prefix is ranking on less than the agent it
+    is trying to help. On this machine's roster only two descriptions fit in 60 characters at
+    all (59 skills, measured 2026-09-21).
+    """
 
     name: str
     source: str  # "user" | "plugin" | "project"
     path: str
     description: str
-    index_description: str
     body: str
 
 
@@ -118,9 +119,7 @@ def _unquote(value: str) -> str:
     return value
 
 
-def _load_skill(
-    skill_md: Path, name: str, source: str, index_chars: int, excerpt_chars: int
-) -> Skill | None:
+def _load_skill(skill_md: Path, name: str, source: str) -> Skill | None:
     try:
         text = skill_md.read_text(encoding="utf-8", errors="replace")
     except OSError:
@@ -136,8 +135,7 @@ def _load_skill(
         source=source,
         path=str(skill_md),
         description=description,
-        index_description=description[:index_chars],
-        body=body.strip()[:excerpt_chars],
+        body=body.strip(),
     )
 
 
@@ -147,8 +145,6 @@ def _scan_skills_dir(
     *,
     prefix: str = "",
     skip_dirs: Iterable[str] = (),
-    index_chars: int = INDEX_CHARS,
-    excerpt_chars: int = EXCERPT_CHARS,
 ) -> list[Skill]:
     """Every ``<directory>/<name>/SKILL.md``. Symlinked entries are followed by design —
     a skill vendored by an external tool lives outside the skills dir (e.g. hunk-review)."""
@@ -164,7 +160,7 @@ def _scan_skills_dir(
         skill_md = entry / "SKILL.md"
         if not skill_md.is_file():
             continue
-        skill = _load_skill(skill_md, f"{prefix}{entry.name}", source, index_chars, excerpt_chars)
+        skill = _load_skill(skill_md, f"{prefix}{entry.name}", source)
         if skill is not None:
             found.append(skill)
     return found
@@ -260,8 +256,6 @@ def build_roster(
     settings_path: Path | None,
     cwd: Path | None,
     exclude: Iterable[str] = (SELF_NAME,),
-    index_chars: int = INDEX_CHARS,
-    excerpt_chars: int = EXCERPT_CHARS,
 ) -> list[Skill]:
     """The merged roster, sorted by name.
 
@@ -271,31 +265,17 @@ def build_roster(
     merged: dict[str, Skill] = {}
 
     if user_skills_dir is not None:
-        for skill in _scan_skills_dir(
-            user_skills_dir,
-            "user",
-            skip_dirs=_SKIPPED_USER_DIRS,
-            index_chars=index_chars,
-            excerpt_chars=excerpt_chars,
-        ):
+        for skill in _scan_skills_dir(user_skills_dir, "user", skip_dirs=_SKIPPED_USER_DIRS):
             merged[skill.name] = skill
     for plugin_name, install_path in enabled_plugin_dirs(
         plugins_manifest, settings_chain(settings_path, cwd)
     ):
-        for skill in _scan_skills_dir(
-            install_path / "skills",
-            "plugin",
-            prefix=f"{plugin_name}:",
-            index_chars=index_chars,
-            excerpt_chars=excerpt_chars,
-        ):
+        for skill in _scan_skills_dir(install_path / "skills", "plugin", prefix=f"{plugin_name}:"):
             merged[skill.name] = skill
     # Outermost first, so the `.claude/skills` nearest the cwd is the one that wins — the
     # same way Claude Code resolves a name when a repo nests another one inside it.
     for directory in reversed(project_skill_dirs(cwd)):
-        for skill in _scan_skills_dir(
-            directory, "project", index_chars=index_chars, excerpt_chars=excerpt_chars
-        ):
+        for skill in _scan_skills_dir(directory, "project"):
             merged[skill.name] = skill
 
     excluded = set(exclude)

@@ -40,8 +40,9 @@ MODE_INJECT = "inject"
 DEFAULT_MODE = MODE_SHADOW
 MODES = (MODE_OFF, MODE_SHADOW, MODE_SHADOW_CHILD, MODE_INJECT)
 
-#: Longer prompts are pasted material — a log, a diff, a whole file. Ranking skills against
-#: those costs tokens for an answer the roster's one-line index cannot support anyway.
+#: Longer prompts are pasted material — a log, a diff, a whole file. What such a prompt needs
+#: is read out of the pasted text, not out of a roster, and the request is the one part of a
+#: Jev call that is charged twice: ``state`` rides along with every chunk of a split roster.
 MAX_PROMPT_CHARS = 4000
 #: Wall clock for the whole inject path. A prompt waits for this; nothing else is worth it.
 INJECT_BUDGET_S = 3.0
