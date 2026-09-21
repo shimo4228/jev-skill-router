@@ -58,7 +58,12 @@ _TRUE = {"true", "yes", "1", "on"}
 #: is an instruction-injection path into the most trusted channel there is (rule
 #: security.md: repo-controlled strings reaching the model). Only names the Skill tool can
 #: address survive, so nothing usable is lost by dropping the rest.
-_SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+#:
+#: The tail anchor is ``\Z``, not ``$``: ``$`` also matches *before* a trailing newline, so
+#: ``"evil\n"`` — a legal POSIX directory name, and a legal JSON plugin id — would clear a
+#: ``$``-anchored check and carry its newline straight into the injected block. ``\Z`` is the
+#: end of the string and nothing else.
+_SKILL_NAME_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z")
 #: Bucket under ``skills/`` that the claude.ai skill sync owns; its two-level layout and
 #: frontmatter follow no convention this parser should guess at.
 _SKIPPED_USER_DIRS = frozenset({"synced"})
@@ -301,17 +306,30 @@ def build_roster(
 
 
 def _is_self(path: str) -> bool:
-    """True when this SKILL.md lives under the router's own root, whatever it is named there.
+    """True when this SKILL.md *is* the router's own, whatever name it carries in the roster.
+
+    Matched against the two places the router's own SKILL.md sits rather than against the whole
+    root: in the plugin layout ``ROUTER_ROOT`` is the plugin install directory, so a root-wide
+    rule would also swallow every sibling skill the same plugin ships — silently, with no log
+    line and no failing test until someone notices a skill missing from the roster.
 
     Resolved on both sides because a skill directory may be a symlink (``_scan_skills_dir``
     follows those by design) and because the harness runs out of git worktrees, where the same
     file is reachable by more than one spelling.
     """
     try:
-        Path(path).resolve().relative_to(ROUTER_ROOT)
-    except (OSError, ValueError):
+        resolved = Path(path).resolve()
+    except OSError:
         return False
-    return True
+    #: ``ROUTER_ROOT/SKILL.md`` in the harness, ``ROUTER_ROOT/skills/<self>/SKILL.md`` as a
+    #: plugin. Built per call so a test that repoints ``ROUTER_ROOT`` repoints these too.
+    for candidate in (ROUTER_ROOT / "SKILL.md", ROUTER_ROOT / "skills" / SELF_NAME / "SKILL.md"):
+        try:
+            if resolved == candidate.resolve():
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def n_by_source(roster: Iterable[Skill]) -> dict[str, int]:

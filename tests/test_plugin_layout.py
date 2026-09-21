@@ -334,6 +334,29 @@ def test_a_skill_outside_the_router_root_is_kept(tmp_path, monkeypatch):
     assert names == {"jev-skill-router-docs"}
 
 
+def test_a_sibling_skill_in_the_same_plugin_survives(tmp_path, monkeypatch):
+    """Self-exclusion is the router's own SKILL.md, not the whole install root. In the plugin
+    layout the root holds every skill the plugin ships, so a root-wide rule would drop them."""
+    plugin_root = tmp_path / "plugins" / "jev-skill-router" / "0.1.0"
+    (plugin_root / "scripts").mkdir(parents=True)
+    write_skill(plugin_root / "skills", "jev-skill-router", description="Routes prompts.")
+    write_skill(plugin_root / "skills", "jev-report", description="Reads the decision log.")
+    monkeypatch.setattr(roster_mod, "ROUTER_ROOT", plugin_root.resolve())
+
+    names = {
+        s.name
+        for s in roster_mod.build_roster(
+            user_skills_dir=plugin_root / "skills",
+            plugins_manifest=None,
+            settings_path=None,
+            cwd=None,
+            exclude=(),
+        )
+    }
+
+    assert names == {"jev-report"}
+
+
 def test_router_root_points_at_the_package_parent():
     """Both deployments put ``scripts/`` one level under the root, so one expression covers
     the harness (``skills/jev-skill-router/``) and the plugin (``<install>/``)."""

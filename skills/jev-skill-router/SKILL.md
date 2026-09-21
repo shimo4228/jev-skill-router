@@ -4,7 +4,8 @@ description: >
   A Claude Code UserPromptSubmit hook that asks TypeSafe Jev which installed skill (user,
   plugin or project) fits the prompt — two typed requests, at most one skill name back — and
   either records the decision (shadow) or injects a one-line pointer (inject). Not invoked by
-  the model: it is wired in settings.json and this file is its operating manual.
+  the model: it runs as a hook (plugin install, or one line in settings.json) and this file is
+  its operating manual.
 origin: shimo4228
 replaces: >
   TypeSafe cookbook "Skill suggestion"
@@ -29,12 +30,19 @@ Python 3.10+, standard library only. The runtime is `scripts/`; nothing else is 
 
 ## Install
 
-1. Put the directory at `~/.claude/skills/jev-skill-router/`.
-2. Store a TypeSafe API key (https://console.typesafe.ai/keys) where the hook can read it:
-   `~/.config/typesafe/api_key`, mode 0600, holding either the bare key or a
-   `TYPESAFE_API_KEY=...` line. Resolution order: env `TYPESAFE_API_KEY` →
-   env `JEV_ROUTER_KEY_FILE` (a path) → the default file.
-3. Wire the hook and pick the mode in `~/.claude/settings.json`:
+As a plugin (wires the hook for you):
+
+```
+/plugin marketplace add shimo4228/jev-skill-router
+/plugin install jev-skill-router@jev-skill-router
+```
+
+Claude Code asks for the options when it enables the plugin: a TypeSafe API key
+(https://console.typesafe.ai/keys — stored in the system keychain, optional if you pass the key
+another way), the mode (`shadow` by default; the picker needs Claude Code 2.1.271+), and an
+optional log path.
+
+By hand: put this directory anywhere and add one hook to `~/.claude/settings.json`:
 
 ```json
 {
@@ -42,12 +50,20 @@ Python 3.10+, standard library only. The runtime is `scripts/`; nothing else is 
   "hooks": {
     "UserPromptSubmit": [
       { "hooks": [ { "type": "command",
-                     "command": "python3 ~/.claude/skills/jev-skill-router/scripts/route.py",
+                     "command": "python3 /path/to/jev-skill-router/scripts/route.py",
                      "timeout": 5 } ] }
     ]
   }
 }
 ```
+
+Where each setting comes from, first match wins:
+
+| Setting | Sources |
+|---|---|
+| mode | env `JEV_ROUTER` → plugin option `mode` → `shadow`. The environment variable wins so one unattended script can set `JEV_ROUTER=off` for itself |
+| API key | env `TYPESAFE_API_KEY` → plugin option `api_key` → the file named by env `JEV_ROUTER_KEY_FILE` → `~/.config/typesafe/api_key` (mode 0600; a bare key or a `TYPESAFE_API_KEY=...` line) |
+| log file | env `JEV_ROUTER_LOG` → plugin option `log_path` → `decisions.jsonl` in the plugin's data directory → `~/.claude/metrics/jev-decisions.jsonl` |
 
 Start in `shadow`. Switch to `inject` after reading your own log (see "Reading the log").
 
@@ -61,8 +77,9 @@ Start in `shadow`. Switch to `inject` after reading your own log (see "Reading t
 
 Skipped without calling Jev, each leaving a log row with the cause in `reason`: an unrecognised
 `JEV_ROUTER` value (a typo never turns into injection or traffic), an empty prompt, prompts
-starting with `/`, prompts over 4000 characters, a missing key, and sessions whose cwd is under
-`/tmp/skill-comply-sandbox`.
+starting with `/`, prompts over 4000 characters, a missing key, and sessions whose cwd is under a
+prefix listed in env `JEV_ROUTER_SKIP_CWD_PREFIX` (colon-separated, empty by default — use it to
+keep test sandboxes and fixture runs away from the API).
 
 Every failure path exits 0. A routing problem costs a log line, never a turn.
 
@@ -112,14 +129,15 @@ path are never sent.
 sessions (cron, launchd, `claude -p`) are routed like interactive ones unless they set
 `JEV_ROUTER=off`.
 
-`TYPESAFE_BASE_URL` overrides the endpoint; anything other than `https://` (or plain `http://`
-to a loopback host, for stubs) is refused before the key is attached. A 30x answer is refused
+The endpoint host is pinned: `TYPESAFE_BASE_URL` may change the path or point at a loopback stub
+(plain `http://` is allowed only there), but any other host is refused before the key is
+attached — one environment variable cannot redirect the key and the prompt elsewhere. A 30x answer is refused
 instead of followed, so the key is never re-sent to a redirect target.
 
 ## Reading the log
 
-One JSON line per routed or skipped prompt, appended to `~/.claude/metrics/jev-decisions.jsonl`
-(override: `JEV_ROUTER_LOG`; created 0600; a symlinked path is refused). The prompt text is never
+One JSON line per routed or skipped prompt, appended to the log file resolved under "Install"
+(created 0600, its directory 0700; a symlinked path is refused). The prompt text is never
 written — only `prompt_sha` and `prompt_chars`.
 
 | Field | Meaning |
@@ -132,8 +150,8 @@ written — only `prompt_sha` and `prompt_chars`.
 | `chunks`, `usage`, `elapsed_ms` | requests spent, tokens, wall-clock |
 
 The log only accumulates; nothing reads it back. To decide whether `inject` is worth turning on,
-join it against what the session actually used (in this harness, `metrics/skill-usage.jsonl` by
-`session` and `ts`) and read three counts: suggestion = skill used, suggestion but no skill
+join it by `session` and `ts` against your own record of which skills the session actually used
+(a PostToolUse log of `Skill` calls is enough) and read three counts: suggestion = skill used, suggestion but no skill
 used, skill used but no suggestion. A missing log means unmeasured, never zero suggestions.
 
 ## Limits

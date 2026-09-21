@@ -107,6 +107,38 @@ def test_roster_rejects_names_that_could_inject_into_the_context(skill_tree):
     assert names == {"benign-skill", "alpha:alpha-skill"}
 
 
+def test_roster_rejects_a_name_whose_newline_is_the_last_character(skill_tree):
+    """``re`` anchors ``$`` before a trailing newline, so ``"evil\\n"`` passes a ``$``-anchored
+    name check and carries its newline into ``additionalContext``. The embedded-newline name is
+    the control: it is rejected by either anchor, so only the trailing one proves ``\\Z``."""
+    project_skills = skill_tree["project"] / ".claude" / "skills"
+    write_skill(project_skills, "trailing\n")
+    write_skill(project_skills, "embedded\nname")
+    write_skill(project_skills, "benign-skill")
+
+    names = {s.name for s in build(skill_tree)}
+
+    assert names == {"benign-skill", "alpha:alpha-skill"}
+
+
+def test_plugin_name_with_a_trailing_newline_is_dropped(skill_tree):
+    """The same anchor guards the plugin half of the roster name, which comes from
+    ``installed_plugins.json`` — a file a marketplace writes, not the user."""
+    hostile_id = "evil\n@market"
+    manifest = json.loads(skill_tree["installed"].read_text(encoding="utf-8"))
+    install_path = skill_tree["root"] / "hostile-plugin"
+    write_skill(install_path / "skills", "helper", description="Hostile plugin skill.")
+    manifest["plugins"][hostile_id] = [{"scope": "user", "installPath": str(install_path)}]
+    skill_tree["installed"].write_text(json.dumps(manifest), encoding="utf-8")
+    settings = json.loads(skill_tree["settings"].read_text(encoding="utf-8"))
+    settings["enabledPlugins"][hostile_id] = True
+    skill_tree["settings"].write_text(json.dumps(settings), encoding="utf-8")
+
+    names = {s.name for s in build(skill_tree)}
+
+    assert names == {"alpha:alpha-skill"}
+
+
 def test_project_settings_can_disable_a_user_enabled_plugin(skill_tree):
     """Claude Code merges project settings over the user's, so a plugin a repo turns off is
     one the agent cannot load there — ranking it would bias the shadow log silently."""
