@@ -28,7 +28,7 @@ jev-skill-router は、skill を何十本も入れている人のための Claud
 **モデルに見せるもの自体を変えたいなら、この道具ではありません。** それができる仕組みは 2 つあります。
 
 - 公式の設定 `skillOverrides` は、skill をモデルに「名前と description」「名前だけ」「見せない」のどれで載せるかを決められます（[skills の docs](https://code.claude.com/docs/en/skills)、値は `on` / `name-only` / `user-invocable-only` / `off`、2026-09-21 確認）。
-- Claude Code の early access 機能である function hooks（通称 mods、[設計スレッド](https://github.com/anthropics/claude-code/issues/91870)）は、skill 一覧を書き換え可能な添付として公開しています。`anthropics/claude-code` の `mods/types/claude-code.d.ts` が、`prompt.attachment` の種別として `skill_listing` を挙げています（2026-09-21 確認）。私たちは試していません。cookbook が名簿を動かさずに 1 行だけ足している理由として挙げているのは、名簿が変わらなければ、その部分の prefix cache が効き続けることです。一覧をターンごとに書き換えれば、おそらくそれが失われます。このプロジェクトは、どちらの仕組みも使っていません。
+- Claude Code の early access 機能である function hooks（通称 mods、[設計スレッド](https://github.com/anthropics/claude-code/issues/91870)）は、skill 一覧を書き換え可能な添付として公開しています。`anthropics/claude-code` の `mods/types/claude-code.d.ts` が、`prompt.attachment` の種別として `skill_listing` を挙げています（2026-09-21 確認）。これを実際に行う mod がすでにあります。`davila7/claude-code-templates` の [jev-skill-suggestion](https://github.com/davila7/claude-code-templates/tree/main/cli-tool/components/mods/productivity/jev-skill-suggestion)（最初の commit は 2026-09-19）は、skill 一覧をモデルに読ませず、同じ cookbook の手順で Jev に高々 1 件を選ばせ、その skill の `SKILL.md` を添付し、`skillOverrides` で skill を隠します。同 README は、一覧への応答が毎回同じなのでモデルの prompt cache は保たれる、と書いています。私たちは function hooks もこの mod も試しておらず、効くかどうかは分かりません。このプロジェクトは、どちらの仕組みも使っていません。
 
 ## インストール
 
@@ -100,7 +100,7 @@ Relevant to the current request: adr-writer. Ignore this if it does not fit what
 
 - 手順の出所は [TypeSafe の skill suggestion cookbook](https://docs.typesafe.ai/cookbooks/skill_suggestion) です。
 - [DECRUX9812/typesafe-skill-router](https://github.com/DECRUX9812/typesafe-skill-router) は、同じ cookbook を Hermes Agent 向けに実装しています。その文書から 2 つの知見を借りました。1 つの質問は 255 択が上限なので大きな名簿は分割すること、そして順位付けと候補ごとの適合判定が食い違う場合があることです。コードはコピーしていません。
-- Claude Code 向けの router はほかにもあります。たとえば [skillranker](https://github.com/Dicklesworthstone/skillranker) は、ローカルの履歴と較正コマンドを持つ Rust の CLI です。[typesafe-mod](https://github.com/BeLazy167/typesafe-mod) は、同じプロンプトごとの順位付けを function hooks の mod として行うもので、上に書いた限界も同じです。1 行を足すだけで、一覧には触りません。こちらは、追加のパッケージが要らず（TypeSafe の API は必要です）、`/plugin install` で入り、プラグインと project の skill も名簿に含め、提案する前にログに残します。
+- Claude Code 向けの router はほかにもあります。たとえば [skillranker](https://github.com/Dicklesworthstone/skillranker) は、ローカルの履歴と較正コマンドを持つ Rust の CLI です。[typesafe-mod](https://github.com/BeLazy167/typesafe-mod) は、同じプロンプトごとの順位付けを function hooks の mod として行うもので、上に書いた限界も同じです。1 行を足すだけで、一覧には触りません。[jev-skill-suggestion](https://github.com/davila7/claude-code-templates/tree/main/cli-tool/components/mods/productivity/jev-skill-suggestion) はその先へ進み、一覧そのものを置き換えます（「動かして分かったこと」に書いたとおりです）。同じリポジトリには、モデルと effort を Jev で振り分ける [jev-model-router](https://github.com/davila7/claude-code-templates/tree/main/cli-tool/components/mods/productivity/jev-model-router) もあります。こちらは、追加のパッケージが要らず（TypeSafe の API は必要です）、`/plugin install` で入り、プラグインと project の skill も名簿に含め、提案する前にログに残します。
 
 ## 来歴
 
