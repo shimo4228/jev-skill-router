@@ -1,0 +1,15 @@
+{
+  "name": "jev-skill-router",
+  "owner": {
+    "name": "shimo4228",
+    "url": "https://github.com/shimo4228"
+  },
+  "description": "Self-owned marketplace for the jev-skill-router plugin. It carries exactly one plugin, hosted in this same repository.",
+  "plugins": [
+    {
+      "name": "jev-skill-router",
+      "source": "./",
+      "description": "Asks TypeSafe Jev which installed skill fits the prompt and, in shadow mode, logs the answer instead of speaking it."
+    }
+  ]
+}

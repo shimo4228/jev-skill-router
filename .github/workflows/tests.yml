@@ -1,0 +1,28 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      # Actions are pinned to a commit SHA, not a tag: a tag is mutable and this workflow
+      # runs with a checkout of the repository it is testing.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          enable-cache: true
+      # The suite never touches the network: every Jev response is a scripted stub, and the
+      # two tests that exercise the failure path aim at a closed loopback port.
+      - run: uv run --frozen pytest -q
+        env:
+          # Belt and braces — a stray key in the runner environment must not turn a stubbed
+          # test into a real API call.
+          TYPESAFE_API_KEY: ""
+          JEV_ROUTER_KEY_FILE: /nonexistent

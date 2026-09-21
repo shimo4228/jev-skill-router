@@ -1,0 +1,6 @@
+{
+  "hookSpecificOutput": {
+    "hookEventName": "UserPromptSubmit",
+    "additionalContext": "\n\n<skill_relevance>\nRelevant to the current request: tdd. Ignore this if it does not fit what the user actually asked for.\n</skill_relevance>"
+  }
+}
