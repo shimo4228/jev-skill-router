@@ -4,9 +4,9 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] — unreleased
+## [0.1.0] — 2026-09-21
 
-First packaging of the router as a Claude Code plugin. Not yet published.
+First release, packaged as a Claude Code plugin.
 
 - `UserPromptSubmit` hook that ranks the whole installed skill roster — user, plugin and
   project skills — with two TypeSafe Jev requests and returns at most one skill name.
