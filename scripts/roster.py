@@ -146,8 +146,16 @@ def _scan_skills_dir(
     prefix: str = "",
     skip_dirs: Iterable[str] = (),
 ) -> list[Skill]:
-    """Every ``<directory>/<name>/SKILL.md``. Symlinked entries are followed by design —
-    a skill vendored by an external tool lives outside the skills dir (e.g. hunk-review)."""
+    """Every ``<directory>/<name>/SKILL.md``. In the user's and a plugin's directory, symlinked
+    entries are followed by design — a skill vendored by an external tool lives outside the
+    skills dir (e.g. hunk-review).
+
+    A project's ``.claude/skills`` belongs to whoever wrote the repo, and the whole SKILL.md is
+    sent to the API as the skill's body. There a SKILL.md must resolve inside the repo level
+    that holds this ``.claude/skills``, or a link to any readable file on the machine would
+    be read and sent. The root is that level (``<level>/.claude/skills`` -> ``<level>``, which
+    ``project_claude_dirs`` already resolved), not ``directory.resolve()``: a symlinked
+    ``skills`` directory would carry a resolved root along to wherever it points."""
     skipped = set(skip_dirs)
     found: list[Skill] = []
     try:
@@ -159,6 +167,8 @@ def _scan_skills_dir(
             continue
         skill_md = entry / "SKILL.md"
         if not skill_md.is_file():
+            continue
+        if source == "project" and not skill_md.resolve().is_relative_to(directory.parent.parent):
             continue
         skill = _load_skill(skill_md, f"{prefix}{entry.name}", source)
         if skill is not None:

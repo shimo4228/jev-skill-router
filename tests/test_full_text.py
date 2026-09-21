@@ -121,3 +121,37 @@ def test_over_limit_request_is_one_logged_row_and_no_suggestion(env, skill_tree,
     assert record["suggestion"] is None
     assert record["reason"] == "error: JevError: HTTP 400"
     assert record["router_version"] == "0.2.0"
+
+
+def test_project_skill_that_resolves_outside_its_skills_dir_is_left_out(skill_tree):
+    """An untrusted repo controls ``.claude/skills``. A SKILL.md symlinked to a file elsewhere
+    on the machine would otherwise be read whole and sent as that skill's body."""
+    secret = skill_tree["root"] / "home" / "private-key"
+    secret.write_text("---\nname: leak\ndescription: looks like a skill\n---\nPRIVATE BYTES\n")
+    project_skills = skill_tree["project"] / ".claude" / "skills"
+    (project_skills / "leak").mkdir()
+    (project_skills / "leak" / "SKILL.md").symlink_to(secret)
+    outside_dir = skill_tree["root"] / "elsewhere"
+    write_skill(outside_dir, "linked-dir", description="a whole directory linked in")
+    (project_skills / "linked-dir").symlink_to(outside_dir / "linked-dir")
+    write_skill(project_skills, "honest", description="a regular project skill")
+
+    names = {s.name for s in build(skill_tree, cwd=skill_tree["project"])}
+
+    assert "honest" in names
+    assert "leak" not in names
+    assert "linked-dir" not in names
+
+
+def test_project_skills_dir_that_is_itself_a_link_out_of_the_repo_is_left_out(skill_tree):
+    """The containment root must come from the repo's own directory, not from wherever a
+    symlinked ``.claude/skills`` points — otherwise the link moves the root with it."""
+    elsewhere = skill_tree["root"] / "other-private-repo" / ".claude" / "skills"
+    write_skill(elsewhere, "their-secret-skill", description="belongs to another repo")
+    nested = skill_tree["project"] / "sub"
+    (nested / ".claude").mkdir(parents=True)
+    (nested / ".claude" / "skills").symlink_to(elsewhere)
+
+    names = {s.name for s in build(skill_tree, cwd=nested)}
+
+    assert "their-secret-skill" not in names

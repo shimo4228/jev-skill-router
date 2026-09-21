@@ -7,9 +7,28 @@ A Claude Code hook that asks a fast probability model which of your installed sk
 [![tests](https://github.com/shimo4228/jev-skill-router/actions/workflows/tests.yml/badge.svg)](https://github.com/shimo4228/jev-skill-router/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-jev-skill-router is a Claude Code plugin for people who have dozens of skills installed. On every prompt, a `UserPromptSubmit` hook sends the prompt and your skill roster to [TypeSafe](https://typesafe.ai)'s Jev model, which answers typed questions with probabilities instead of text. Code reads those probabilities and names at most one skill, or none. It is Python 3.10+, standard library only, MIT licensed, version 0.1.0, and experimental.
+jev-skill-router is a Claude Code plugin for people who have dozens of skills installed. On every prompt, a `UserPromptSubmit` hook sends the prompt and your skill roster to [TypeSafe](https://typesafe.ai)'s Jev model, which answers typed questions with probabilities instead of text. Code reads those probabilities and names at most one skill, or none. It is Python 3.10+, standard library only, MIT licensed, version 0.2.0, and experimental.
 
-Claude Code shows the model a one-line description of every skill and leaves the choice to it. As the list grows, the model reads past the skill that fits, or loads one when nothing does. This plugin turns that choice into a separate, inspectable decision. It starts in **shadow mode**: it records what it would have suggested and injects nothing, so you can compare its picks with what your sessions actually used before you switch it on.
+**Read this before installing.** We built it, ran it, and concluded that as a router it is unlikely to help a strong model in Claude Code. It is published as a working reference and a measuring instrument, with the reasons written down below, so that anyone considering the same idea can start from what we found. It runs in **shadow mode** by default: it records what it would have suggested and injects nothing.
+
+## What we learned by running it
+
+**It cannot replace Claude Code's own skill selection.** A `UserPromptSubmit` hook can add text to a turn and nothing else. Claude Code still lists every skill's description to the model, and the model still chooses. The router runs alongside that choice. The tokens spent on the skill listing do not go down by one.
+
+**The cookbook's conditions do not carry over.** In TypeSafe's experiment the agent was `claude-haiku-4-5` reading a skill index cut to 60 characters per skill, so a second reader with the full text had something to add. Claude Code shows the model each skill's whole description (up to 1,536 characters, per [the skills docs](https://code.claude.com/docs/en/skills)). Here the router is a weaker judge advising a stronger one that already sees the same descriptions. The only information it adds is the body of `SKILL.md`.
+
+**What we measured** (all on 2026-09-21, author's own roster of 50 to 59 skills, `jev-1.13.0`, prompts in Japanese):
+
+- Scripted single-intent requests ("record this decision as an ADR"): 6 of 6 sensible on 0.2.0. Five named the skill a person would pick, with fit answers of 0.93 to 0.98, and a thank-you message was correctly left alone.
+- The author's real session, 0.1.0 in shadow mode: 6 prompts, 3 sensible and 3 wrong. The wrong ones were mid-conversation follow-ups ("why did you add that guardrail?"), which are most of what a real session contains. The gate scored them 0.34 to 0.64 as if a skill were wanted, and in all three the ranking's winner and the best per-candidate fit disagreed.
+- The six real-session rows are an anecdote, not a rate. They are here because they are the only real-session data this project has. They come from 0.1.0, which ranked on truncated text; the real session has not been re-run on 0.2.0, and by this project's own rule rows from different versions are not pooled.
+
+**What it may still be good for.** If a model fails to use skills because it does the work itself rather than because it picks the wrong one, a per-turn pointer acts as a nudge, not as information. The shadow log can tell those two cases apart (see "Reading your own log"). That is why the author keeps it running in shadow mode, and it will be removed if the log does not show it.
+
+**If you want to change what the model sees**, this is not the tool. Two mechanisms do that:
+
+- The official `skillOverrides` setting lists a skill to the model by name and description, by name only, or not at all ([skills docs](https://code.claude.com/docs/en/skills), values `on` / `name-only` / `user-invocable-only` / `off`, checked 2026-09-21).
+- Claude Code's early-access function hooks ("mods", [design thread](https://github.com/anthropics/claude-code/issues/91870)) expose the skill listing as a rewritable attachment: `mods/types/claude-code.d.ts` in `anthropics/claude-code` names the kind `skill_listing` under `prompt.attachment` (checked 2026-09-21). We have not tried it. The cookbook's stated reason for adding one line and leaving the roster alone is that an unchanged roster keeps prefix caching over it; a listing rewritten every turn would presumably lose that. This project uses neither mechanism.
 
 ## Install
 
@@ -31,18 +50,21 @@ The recipe is TypeSafe's published [skill suggestion cookbook](https://docs.type
 
 The roster is built from three places: your user skills, the skills of plugins that are enabled in your settings, and project skills found from the session's working directory up to the git root. Skills marked `disable-model-invocation: true` are left out. The hook never edits the skill list Claude Code puts in the model's context. It only adds the one block shown below, so prompt caching over that list is unaffected.
 
-Every failure exits 0: a missing key, a timeout or an API error costs one log line, never a turn. In `shadow` mode the hook hands the work to a detached child process and returns at once, so the turn is not delayed. `inject` mode has to wait for the answer and works under a 3 second wall-clock budget across all requests; the three live decisions made on 2026-09-21, on 0.1.0 with its truncated inputs, took 0.5 to 1.3 seconds. 0.2.0 sends more text per request and has not been timed yet.
+Every failure exits 0: a missing key, a timeout or an API error costs one log line, never a turn. In `shadow` mode the hook hands the work to a detached child process and returns at once, so the turn is not delayed. `inject` mode has to wait for the answer and works under a 3 second wall-clock budget across all requests; six live decisions on 0.2.0 (2026-09-21) took 0.7 to 1.6 seconds.
 
 ## What one decision looks like
 
 In every mode except `off`, each prompt appends one JSON line to `decisions.jsonl` in the plugin's data directory. This row is from a live call against `jev-1.13.0`, run in `inject` mode; the prompt (in Japanese) asked to record a design decision as an ADR. `gate` is the mean from step 1, `fits` holds the per-candidate answers from step 2, and both cleared 0.30, so a skill was named. The row is abridged here.
 
 ```json
-{"mode": "inject", "model": "jev-1.13.0", "question_hash": "662772b42ed4",
- "n_skills": 50, "n_by_source": {"user": 45, "plugin": 5, "project": 0},
- "gate": 0.4833, "shortlist": ["adr-writer", "adhd:adhd", "archify"],
- "fits": {"adr-writer": 0.93, "adhd:adhd": 0.15, "archify": 0.05},
- "suggestion": "adr-writer", "elapsed_ms": 1329}
+{"mode": "inject", "model": "jev-1.13.0", "router_version": "0.2.0",
+ "question_hash": "662772b42ed4",
+ "n_skills": 52, "n_by_source": {"user": 45, "plugin": 7, "project": 0},
+ "gate": 0.47, "shortlist": ["adr-writer", "adhd:adhd", "archify"],
+ "fits": {"adr-writer": 0.93, "adhd:adhd": 0.14, "archify": 0.05},
+ "suggestion": "adr-writer", "reason": "shortlist winner adr-writer (fits 0.93)",
+ "usage": {"input_tokens": 21597, "output_tokens": 702, "calls": 2},
+ "elapsed_ms": 1567}
 ```
 
 The prompt text is never written to the log, only its hash and length. In `shadow` mode the row is all that happens. In `inject` mode the decision also adds this block to the turn, and nothing at all when no skill clears the thresholds:
@@ -57,18 +79,18 @@ Relevant to the current request: adr-writer. Ignore this if it does not fit what
 
 Each routed prompt sends to `api.typesafe.ai`: the full prompt text, every roster skill's name and whole description, and, for the top three only, **the whole text of their `SKILL.md`** — including skills that live in a private project's `.claude/skills/`. Conversation history, your project files and tool output are never sent.
 
-A skill directory may be a symlink and is followed, so a `SKILL.md` that points elsewhere sends the contents of whatever it points at. In a repository you did not write, treat `.claude/skills/` as part of what a routed prompt can send.
+In your own `~/.claude/skills/` and in a plugin, a skill directory may be a symlink and is followed. In a project's `.claude/skills/`, which belongs to whoever wrote the repository, a `SKILL.md` that resolves outside that directory is left out, so a link to another file on your machine is never read or sent. The project's own skill files still are: in a repository you did not write, treat `.claude/skills/` as part of what a routed prompt can send.
 
 **A secret pasted into a prompt is sent as typed.** There is no scrubbing step. The endpoint host is pinned in code and redirects are refused, so an environment variable cannot send your key or prompt to another host.
 
 ## Limits
 
 - The thresholds are the cookbook's starting values, measured by the vendor on an English roster with an earlier model version. They are not calibrated for your roster or language. That is what shadow mode is for.
-- This repository has no effectiveness numbers of its own yet. The cookbook reports the vendor's experiment, including cases where the suggestion broke a turn the agent had been getting right. Treat it as the direction on their roster, not a result on yours.
+- This repository has no evidence that injecting the suggestion improves anything. The cookbook reports the vendor's experiment, including cases where the suggestion broke a turn the agent had been getting right, under conditions that differ from Claude Code's (see "What we learned by running it").
 - Skills that are built in, with no `SKILL.md` on disk, and skills under `--add-dir` directories cannot be suggested.
 - Prompts starting with `/` and prompts over 4000 characters are skipped.
 - Jev takes 64k tokens per request, and 32k for the state plus the longest question. Two inputs can reach that: three unusually long `SKILL.md` files in one shortlist, and a roster past the 240-skill chunk size, whose wide question carries that many whole descriptions. Nothing measures the request beforehand — the API answers with an error, the turn passes with no suggestion, and the log row carries the reason.
-- TypeSafe is a paid third-party API and every routed prompt costs one or two requests. In 0.1.0, which sent truncated text, a 50-skill roster used about 2,400 input tokens when the first step stopped and 4,200 to 4,800 when both steps ran. 0.2.0 sends more and has not been measured yet. Check [TypeSafe's pricing](https://docs.typesafe.ai/models) for current rates and limits; this README does not quote them because they change.
+- TypeSafe is a paid third-party API and every routed prompt costs one or two requests. On 0.2.0 with a roster of 52 to 59 skills (2026-09-21), a prompt used about 10,000 input tokens when the first step stopped and 21,600 to 25,300 when both steps ran. Check [TypeSafe's pricing](https://docs.typesafe.ai/models) for current rates and limits; this README does not quote them because they change.
 
 ## Reading your own log
 
@@ -78,7 +100,7 @@ Rows that differ in `model`, `router_version` or `question_hash` come from a dif
 
 - The recipe comes from the [TypeSafe skill suggestion cookbook](https://docs.typesafe.ai/cookbooks/skill_suggestion).
 - [DECRUX9812/typesafe-skill-router](https://github.com/DECRUX9812/typesafe-skill-router) implements the same cookbook for Hermes Agent. Two findings come from its documentation: a single question is capped at 255 choices, so large rosters are chunked, and the ranking and the per-candidate fit can disagree. No code was copied from it.
-- Other routers exist for Claude Code, among them [skillranker](https://github.com/Dicklesworthstone/skillranker), a Rust CLI with local history and calibration commands. This one is for people who want a hook with no packages to install (it still needs the TypeSafe API) that installs with `/plugin install`, sees plugin and project skills, and measures before it speaks.
+- Other routers exist for Claude Code, among them [skillranker](https://github.com/Dicklesworthstone/skillranker), a Rust CLI with local history and calibration commands. [typesafe-mod](https://github.com/BeLazy167/typesafe-mod) does the same per-prompt ranking as a function-hooks mod, and shares the limit described above: it adds a line and leaves the listing alone. This one has no packages to install (it still needs the TypeSafe API), installs with `/plugin install`, sees plugin and project skills, and logs before it speaks.
 
 ## Provenance
 

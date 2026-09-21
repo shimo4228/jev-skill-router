@@ -116,7 +116,7 @@ calibration.
 |---|---|---|
 | user | `~/.claude/skills/*/SKILL.md` (symlinked skill directories are followed) | directory name |
 | plugin | install paths in `~/.claude/plugins/installed_plugins.json` whose plugin is `true` in `enabledPlugins` (user, project and local settings merged) → `skills/*/SKILL.md` | `<plugin>:<directory name>` |
-| project | every `.claude/skills/*/SKILL.md` from the session cwd up to the git root; the nearest directory wins a name clash, and a project skill shadows a user skill of the same name | directory name |
+| project | every `.claude/skills/*/SKILL.md` from the session cwd up to the git root, resolving inside that directory; the nearest directory wins a name clash, and a project skill shadows a user skill of the same name | directory name |
 
 Left out: this skill, skills with `disable-model-invocation: true`, `~/.claude/skills/synced/`,
 and directory names that are not plain identifiers (a name is injected into the model's context,
@@ -130,9 +130,11 @@ skill's name and whole description, and — for the top 3 only — **the whole t
 SKILL.md**, including skills that live in a private project's `.claude/skills/`. Conversation
 history, files, tool output and the key file's path are never sent.
 
-A skill directory may be a symlink and is followed, so a `SKILL.md` that points elsewhere
-sends the contents of whatever it points at. In a repo you did not write, treat
-`.claude/skills/` as part of what a routed prompt can send.
+In your own `~/.claude/skills/` and in a plugin, a skill directory may be a symlink and is
+followed. In a project's `.claude/skills/`, which belongs to whoever wrote the repo, a `SKILL.md`
+that resolves outside that directory is left out of the roster, so a link to another file on
+your machine is never read or sent. The project's own skill files still are: in a repo you did
+not write, treat `.claude/skills/` as part of what a routed prompt can send.
 
 **A secret pasted into a prompt is sent as typed.** There is no scrubbing step. Unattended
 sessions (cron, launchd, `claude -p`) are routed like interactive ones unless they set

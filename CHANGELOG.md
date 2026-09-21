@@ -15,14 +15,30 @@ All notable changes to this project are documented here. The format follows
   Claude Code shows the model the whole description, so ranking on a prefix ranked on less
   than the agent already sees. On a 59-skill roster, two descriptions fit in 60 characters.
 - **More leaves your machine.** For the top three candidates, the whole text of `SKILL.md`
-  is sent, including skills from a private project's `.claude/skills/`, and including the
-  contents of a symlinked `SKILL.md`'s target. See "What leaves your machine".
+  is sent, including skills from a private project's `.claude/skills/`. See "What leaves
+  your machine".
 - `router_version` in the decision log is now `0.2.0`. Rows from 0.1.0 measured narrower
   inputs and are a different distribution; read them separately rather than pooled.
 - The `INDEX_CHARS` and `EXCERPT_CHARS` constants and the arguments that carried them are
   gone. Nothing estimates a request's size before sending it: Jev's input budget is 64k
   tokens per request and 32k for the state plus the longest question, and a request over it
   comes back an error that the existing fail-open turns into one logged row and a quiet turn.
+
+### Security
+
+- A project skill is listed only when its `SKILL.md` resolves inside the repository level
+  that holds the `.claude/skills` directory. Before this, a repository you cloned could link
+  a `SKILL.md`, a skill directory, or `.claude/skills` itself to a file elsewhere on your
+  machine and have its contents sent as a skill body (700 characters in 0.1.0). Symlinks in
+  your own `~/.claude/skills/` and in plugins are still followed.
+
+### Documentation
+
+- The README now opens with what running it showed: a prompt hook cannot replace Claude
+  Code's own skill selection, the cookbook's conditions do not carry over to a strong model
+  that already sees whole descriptions, and the first real-session decisions were 3 sensible
+  of 6. It points to `skillOverrides` and the early-access function hooks for anyone who
+  wants to change the listing itself. Measurements for 0.2.0 replace the 0.1.0 figures.
 
 ### Fixed
 
