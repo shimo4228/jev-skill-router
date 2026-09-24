@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" role="img" aria-labelledby="title desc">
+  <title id="title">jev-skill-router のしくみ</title>
+  <desc id="desc">あなたがプロンプトを打つと、高速な判定モデル Jev が、どの skill が合うかをどれだけ確かかと一緒に見立てます。既定の shadow モードでは見立てをログに書くだけで、inject モードでは Claude に 1 行のヒントも渡します。Claude は変わらず全 skill を見て、最後に自分で選びます。</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Noto Sans CJK JP", "Yu Gothic", Meiryo, Helvetica, Arial, sans-serif; fill: #24292F; }
+    .emo { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+    .lbl { font-size: 30px; font-weight: 700; }
+    .sub { font-size: 22px; fill: #57606A; }
+    .row { font-size: 25px; font-weight: 700; }
+    .rowsub { font-size: 19px; fill: #57606A; }
+    .chip { font-size: 18px; font-weight: 600; fill: #5B45B0; }
+    .band { font-size: 24px; font-weight: 600; }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8C959F"/>
+    </marker>
+  </defs>
+
+  <rect width="960" height="440" rx="28" fill="#FFFBF2" stroke="#EADFC8" stroke-width="2"/>
+
+  <!-- 1. you type -->
+  <rect x="36" y="36" width="250" height="256" rx="22" fill="#E7F0FA" stroke="#6A9BC3" stroke-width="2.5"/>
+  <text class="emo" x="161" y="132" font-size="76" text-anchor="middle">💬</text>
+  <text class="lbl" x="161" y="202" text-anchor="middle">あなたが入力</text>
+  <text class="sub" x="161" y="238" text-anchor="middle">プロンプト</text>
+
+  <line x1="294" y1="164" x2="340" y2="164" stroke="#8C959F" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <!-- 2. Jev guesses -->
+  <rect x="355" y="36" width="250" height="256" rx="22" fill="#EBE4FA" stroke="#8B72D6" stroke-width="2.5"/>
+  <text class="emo" x="480" y="132" font-size="76" text-anchor="middle">⚖️</text>
+  <text class="lbl" x="480" y="202" text-anchor="middle">Jev が見立てる</text>
+  <text class="sub" x="480" y="236" text-anchor="middle">どの skill が合うか</text>
+  <rect x="392" y="251" width="176" height="30" rx="15" fill="#FFFFFF" stroke="#8B72D6" stroke-width="1.5"/>
+  <text class="chip" x="480" y="272" text-anchor="middle">adr-writer · 93%</text>
+
+  <line x1="613" y1="164" x2="659" y2="164" stroke="#8C959F" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <!-- 3. what happens to the guess -->
+  <rect x="674" y="36" width="250" height="256" rx="22" fill="#E2F5E9" stroke="#57A874" stroke-width="2.5"/>
+  <text class="emo" x="716" y="118" font-size="46" text-anchor="middle">📓</text>
+  <text class="row" x="752" y="100">shadow</text>
+  <text class="rowsub" x="752" y="128">記録だけ（既定）</text>
+  <line x1="700" y1="164" x2="898" y2="164" stroke="#57A874" stroke-width="1.5" stroke-dasharray="5 5"/>
+  <rect x="761" y="151" width="76" height="26" rx="13" fill="#E2F5E9"/>
+  <text x="799" y="170" font-size="18" font-weight="700" text-anchor="middle" fill="#1A7F37">または</text>
+  <text class="emo" x="716" y="230" font-size="46" text-anchor="middle">👉</text>
+  <text class="row" x="752" y="212">inject</text>
+  <text class="rowsub" x="752" y="240">Claude にヒント</text>
+
+  <!-- the part that does not change -->
+  <rect x="36" y="320" width="888" height="88" rx="20" fill="#F3F4F6" stroke="#6E7781" stroke-width="2" stroke-dasharray="7 6"/>
+  <text class="emo" x="84" y="378" font-size="40" text-anchor="middle">🤖</text>
+  <text class="band" x="120" y="372">Claude は変わらず全 skill を見て、最後に自分で選びます。</text>
+</svg>
