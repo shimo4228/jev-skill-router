@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The `User-Agent` header said `jev-skill-router/0.1.0` on every 0.2.0 request. A test now
+  holds pyproject, the plugin manifest, `router_version` and the `User-Agent` to one version.
+
+### Documentation
+
+- README and the operating manual stated the project-skill containment too narrowly. A project
+  `SKILL.md` is read when it resolves inside the repository level that holds `.claude/` (as the
+  0.2.0 security entry says), so a link to another file in that repository, including an
+  uncommitted `.env`, is sent with a routed prompt. Both now say so.
+- The README now names the loopback exception for `TYPESAFE_BASE_URL`, the extra request per
+  240 skills, and the gate's flipped third answer.
+- The 0.2.0 entry below said Claude Code shows the model the whole description; it shows each
+  description up to 1,536 characters (skills docs, checked 2026-09-21).
+
 ## [0.2.0] — 2026-09-21
 
 ### Changed

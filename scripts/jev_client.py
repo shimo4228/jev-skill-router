@@ -33,7 +33,7 @@ DEFAULT_BASE_URL = "https://api.typesafe.ai"
 #: the path or the port, but not the destination.
 API_HOST = "api.typesafe.ai"
 ENDPOINT_PATH = "/v1/systemone"
-USER_AGENT = "jev-skill-router/0.1.0"
+USER_AGENT = "jev-skill-router/0.2.0"
 #: Hosts allowed to be reached over plaintext, for tests and local stubs only.
 LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 #: Where the key lives when neither TYPESAFE_API_KEY nor JEV_ROUTER_KEY_FILE says otherwise.

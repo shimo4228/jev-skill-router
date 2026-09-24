@@ -116,25 +116,27 @@ calibration.
 |---|---|---|
 | user | `~/.claude/skills/*/SKILL.md` (symlinked skill directories are followed) | directory name |
 | plugin | install paths in `~/.claude/plugins/installed_plugins.json` whose plugin is `true` in `enabledPlugins` (user, project and local settings merged) → `skills/*/SKILL.md` | `<plugin>:<directory name>` |
-| project | every `.claude/skills/*/SKILL.md` from the session cwd up to the git root, resolving inside that directory; the nearest directory wins a name clash, and a project skill shadows a user skill of the same name | directory name |
+| project | every `.claude/skills/*/SKILL.md` from the session cwd up to the git root (24 levels up when there is no git root), resolving inside the repository level that holds that `.claude/`; the nearest directory wins a name clash, and a project skill shadows a user skill of the same name | directory name |
 
 Left out: this skill, skills with `disable-model-invocation: true`, `~/.claude/skills/synced/`,
 and directory names that are not plain identifiers (a name is injected into the model's context,
 so it is validated before it enters the roster). `CLAUDE_CONFIG_DIR` relocates `~/.claude` for
-roster discovery; the log location follows `HOME` and `JEV_ROUTER_LOG` only.
+roster discovery only; the log location is resolved as in the table under "Install".
 
 ## What leaves the machine
 
 Each routed prompt sends to `https://api.typesafe.ai`: the full prompt text, every roster
-skill's name and whole description, and — for the top 3 only — **the whole text of their
-SKILL.md**, including skills that live in a private project's `.claude/skills/`. Conversation
+skill's name and whole description, and — for the top 3 only — **the whole body of their
+SKILL.md** (the text after its frontmatter), including skills that live in a private project's `.claude/skills/`. Conversation
 history, files, tool output and the key file's path are never sent.
 
 In your own `~/.claude/skills/` and in a plugin, a skill directory may be a symlink and is
-followed. In a project's `.claude/skills/`, which belongs to whoever wrote the repo, a `SKILL.md`
-that resolves outside that directory is left out of the roster, so a link to another file on
-your machine is never read or sent. The project's own skill files still are: in a repo you did
-not write, treat `.claude/skills/` as part of what a routed prompt can send.
+followed. In a project's `.claude/skills/`, which belongs to whoever wrote the repo, a `SKILL.md` is read
+only if it resolves inside that repository level (the directory holding `.claude/`), so a link to a
+file elsewhere on your machine is never read or sent. A link to another file inside the same
+repository is followed, including one you added and never committed, such as `.env`: in a repo
+you did not write, treat `.claude/skills/` and anything in the repository it can link to as part
+of what a routed prompt can send.
 
 **A secret pasted into a prompt is sent as typed.** There is no scrubbing step. Unattended
 sessions (cron, launchd, `claude -p`) are routed like interactive ones unless they set
