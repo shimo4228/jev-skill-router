@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `evals/shadow_join.py` joins the shadow log with Claude Code's session transcripts and prints
+  how many suggestions were followed by a call of the suggested skill. It can draw a seeded
+  random sample of unused suggestions to read one by one. It reads local files only and its
+  summary holds counts only. `evals/README.md` gives the method and the author's week:
+  539 suggestions in 1,242 decisions, 28 followed by a call within 30 minutes when calls
+  inside subagents are counted, 26 in the main sessions alone. The router itself is unchanged.
+
 ### Fixed
 
 - The `User-Agent` header said `jev-skill-router/0.1.0` on every 0.2.0 request. A test now
@@ -13,6 +22,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Documentation
 
+- The README said the author keeps the router running in shadow mode. The author removed it
+  from their own setup on 2026-09-28 after reading a week of the log, and the README now says
+  so, with the numbers and a link to the article.
 - README and the operating manual stated the project-skill containment too narrowly. A project
   `SKILL.md` is read when it resolves inside the repository level that holds `.claude/` (as the
   0.2.0 security entry says), so a link to another file in that repository, including an

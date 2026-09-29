@@ -26,3 +26,9 @@ jobs:
           # test into a real API call.
           TYPESAFE_API_KEY: ""
           JEV_ROUTER_KEY_FILE: /nonexistent
+      # The evals read local files only and their tests use synthetic transcripts. They live
+      # outside scripts/, so the coverage gate of the plugin runtime does not apply to them.
+      # They run on the oldest Python the README promises.
+      - run: uv run --frozen --python 3.10 pytest evals -q --no-cov
+      # evals/ is outside the sync that scans the published runtime for personal paths.
+      - run: "! grep -rn -e /Users/ -e /home/ evals"

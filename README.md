@@ -27,7 +27,9 @@ jev-skill-router is a Claude Code plugin for people who have dozens of skills in
 - The author's real session, 0.1.0 in shadow mode: 6 prompts, 3 sensible and 3 wrong. The wrong ones were mid-conversation follow-ups ("why did you add that guardrail?"), the kind of prompt that fills most of the author's own sessions. The router's first check, the gate, stops when its score is under 0.30; it scored these three 0.34 to 0.64, as if a skill were wanted. In all three, Jev's pick and the candidate with the best fit also disagreed (see "How it decides").
 - The six real-session rows are an anecdote, not a rate. They are here because they are the only real-session data this project has. They come from 0.1.0, which ranked on truncated text; the real session has not been re-run on 0.2.0, and log rows from different versions are kept apart rather than pooled.
 
-**What it may still be good for.** If a model fails to use skills because it does the work itself rather than because it picks the wrong one, a per-turn pointer acts as a nudge, not as information. The shadow log, joined with the session transcripts, can tell those two cases apart (see "Reading your own log"). That is why the author keeps the router running in shadow mode, and will uninstall it from their own setup if the join does not show that pattern: sensible suggestions on turns where the session used no skill at all.
+**What it may still be good for.** If a model fails to use skills because it does the work itself rather than because it picks the wrong one, a per-turn pointer acts as a nudge, not as information. The shadow log, joined with the session transcripts, can tell those two cases apart (see "Reading your own log"). The pattern to look for is sensible suggestions on turns where the session used no skill at all.
+
+**A week in shadow mode did not show that pattern, and the author removed the router from their own setup** on 2026-09-28. Of 539 suggestions in 1,242 decisions, 28 were followed within 30 minutes by a call of the suggested skill, about 5% (26 when calls inside subagents are left out). The author then read 20 of the unused suggestions: 13 were off target, and one may have been a miss by Claude Code. The script and the numbers are in [evals/](evals/README.md). The account is in the article [「これ意味あるかな？」Claude Codeに入れたJevのプラグインを1週間で外すまで](https://zenn.dev/shimo4228/articles/jev-guard-blind-to-local-verify) (Japanese).
 
 **If you want to change what the model sees**, this is not the tool. Besides editing each skill's own frontmatter, two mechanisms do that, and this project uses neither:
 
@@ -102,6 +104,8 @@ In a repository you did not write, treat `.claude/skills/`, and anything in that
 
 Rows that differ in `model`, `router_version` or `question_hash` come from a different judge, so read them separately. To decide whether `inject` is worth turning on, join the log by `session` and time against which skills each session actually used (the router does not record that; Claude Code's session transcripts under `~/.claude/projects/` show every Skill tool call), and read three counts: suggested and used, suggested but unused, used but not suggested. The count that argues for `inject` is the second one, restricted to sensible suggestions on turns that used no other skill: those are the turns where a nudge could have helped. A missing log means unmeasured, not zero suggestions.
 
+`python3 evals/shadow_join.py` does the join and prints the first two counts and the number of Skill calls. It cannot tell whether a suggestion was sensible: for that it draws a random sample of unused suggestions for you to read one by one. [evals/](evals/README.md) explains the options and shows the author's own week.
+
 ## Related work
 
 - The recipe comes from the [TypeSafe skill suggestion cookbook](https://docs.typesafe.ai/cookbooks/skill_suggestion).
@@ -126,5 +130,6 @@ This project is not affiliated with TypeSafe AI. The code was written with Claud
 ## Documentation and license
 
 - [Operating manual](skills/jev-skill-router/SKILL.md): every mode, option, log field and skip condition
+- [Evals](evals/README.md): the script that joins the log with session transcripts, and the author's week in numbers
 - [Changelog](CHANGELOG.md)
 - License: [MIT](LICENSE)
