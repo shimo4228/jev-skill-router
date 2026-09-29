@@ -31,4 +31,6 @@ jobs:
       # They run on the oldest Python the README promises.
       - run: uv run --frozen --python 3.10 pytest evals -q --no-cov
       # evals/ is outside the sync that scans the published runtime for personal paths.
-      - run: "! grep -rn -e /Users/ -e /home/ evals"
+      # git grep reads tracked files only, so the bytecode the test run just wrote (which
+      # holds the runner's own paths) is not scanned.
+      - run: "! git grep -n -e /Users/ -e /home/ -- evals"

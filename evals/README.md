@@ -2,7 +2,7 @@
 
 The router logs what Jev picked. It does not log what the session did next. `shadow_join.py` joins the two, so you can see how often a suggested skill was actually called.
 
-The author ran the router in shadow mode for a week, read the join, and removed the router from their own setup. The story is in the article [「これ意味あるかな？」Claude Codeに入れたJevのプラグインを1週間で外すまで](https://zenn.dev/shimo4228/articles/jev-guard-blind-to-local-verify) (Japanese, on Zenn). This page holds the method and the numbers behind it.
+The author ran the router in shadow mode for a week, read the join, and removed the router from their own setup. The story is in the article ["Is There Any Point to This?" Removing the Jev Plugins I Added to Claude Code After One Week](https://dev.to/shimo4228/is-there-any-point-to-this-removing-the-jev-plugins-i-added-to-claude-code-after-one-week-49eh) ([Japanese](https://zenn.dev/shimo4228/articles/jev-guard-blind-to-local-verify)). This page holds the method and the numbers behind it.
 
 ## Run it on your own log
 

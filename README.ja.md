@@ -29,7 +29,7 @@ jev-skill-router は、skill を何十本も入れていて、合う skill を�
 
 **それでも役に立つかもしれない場面。** モデルが skill を使わない理由が、「間違った skill を選ぶ」ことではなく「skill を読まずに自分でやってしまう」ことにあるなら、ターンごとの名指しは、情報としてではなく、きっかけとして働きます。shadow のログをセッション記録と突き合わせれば、この 2 つを見分けられます（「自分のログを読む」を見てください）。探す傾向は、提案は妥当だったのに、そのターンでは skill が 1 つも使われなかった、というものです。
 
-**shadow のまま 1 週間動かしても、その傾向は見えませんでした。著者は 2026-09-28 に、自分の環境から router を外しました。** 判定 1,242 回のうち提案は 539 回で、提案から 30 分以内にその skill が呼ばれたのは 28 回、約 5% でした（サブエージェントの中での呼び出しを除くと 26 回）。その後、使われなかった提案から 20 件を読みました。13 件は的外れで、Claude Code の見落としだったかもしれないのは 1 件でした。script と数字は [evals/](evals/README.md)（英語）にあります。経緯は記事「[「これ意味あるかな？」Claude Codeに入れたJevのプラグインを1週間で外すまで](https://zenn.dev/shimo4228/articles/jev-guard-blind-to-local-verify)」に書きました。
+**shadow のまま 1 週間動かしても、その傾向は見えませんでした。著者は 2026-09-28 に、自分の環境から router を外しました。** 判定 1,242 回のうち提案は 539 回で、提案から 30 分以内にその skill が呼ばれたのは 28 回、約 5% でした（サブエージェントの中での呼び出しを除くと 26 回）。その後、使われなかった提案から 20 件を読みました。13 件は的外れで、Claude Code の見落としだったかもしれないのは 1 件でした。script と数字は [evals/](evals/README.md)（英語）にあります。経緯は記事「[「これ意味あるかな？」Claude Codeに入れたJevのプラグインを1週間で外すまで](https://zenn.dev/shimo4228/articles/jev-guard-blind-to-local-verify)」（[英語版](https://dev.to/shimo4228/is-there-any-point-to-this-removing-the-jev-plugins-i-added-to-claude-code-after-one-week-49eh)）に書きました。
 
 **モデルに見せるもの自体を変えたいなら、この道具ではありません。** 各 skill の frontmatter を書き換える方法のほかに、それができる仕組みが 2 つあり、このプロジェクトはどちらも使っていません。
 
@@ -119,6 +119,7 @@ Jev を使った実験は、この router も含めてどれも記事にして�
 - 「[JevのスキルルーターをClaude Codeに足して、スキル一覧を書き換える手前で引き返した](https://zenn.dev/shimo4228/articles/jev-retrofit-limits)」（[英語版](https://dev.to/shimo4228/i-added-jevs-skill-router-to-claude-code-and-turned-back-just-before-rewriting-the-skill-listing-34in)）。このリポジトリの経緯です。プロンプトの hook で何が変えられたか、どこで引き返したか、判定モデルを自分のハーネスに足す前に確かめる 3 つのことを書きました。
 - 「[文章を書かないモデルJevのスキル選択は、0.3秒でOpusにどこまで近づくか](https://zenn.dev/shimo4228/articles/jev-vs-opus-skill-selection)」（[英語版](https://dev.to/shimo4228/how-close-to-opus-does-jev-a-model-that-writes-no-text-get-at-skill-selection-in-03-seconds-1nfj)）。同じ 150 件の状況で、Jev と Claude Opus に skill を選ばせて比べました。Jev と Opus の一致は、Opus 同士の一致の約半分で、費用は約 560 分の 1 でした。
 - 「[Jevの判断をローカルで再現するには何が要るか](https://zenn.dev/shimo4228/articles/local-decision-model-conditions)」（[英語版](https://dev.to/shimo4228/what-does-it-take-to-reproduce-jevs-decisions-locally-3i0n)）。手元で動く 4 つのモデルに同じ 150 件を解かせ、4 つとも、それぞれ別の理由で Jev の水準に届きませんでした。
+- 「[「これ意味あるかな？」Claude Codeに入れたJevのプラグインを1週間で外すまで](https://zenn.dev/shimo4228/articles/jev-guard-blind-to-local-verify)」（[英語版](https://dev.to/shimo4228/is-there-any-point-to-this-removing-the-jev-plugins-i-added-to-claude-code-after-one-week-49eh)）。この router と、完了を止めるプラグインを Claude Code に入れた 1 週間の話です。2 つとも外した理由と、判定モデルの効果をどこでなら読めるかを書きました。数字は [evals/](evals/README.md)（英語）にあります。
 - 「[LLMに任せていたリサーチの判定を、判定専用モデルJevに移す](https://zenn.dev/shimo4228/articles/jev-research-judgment-offload)」（[英語版](https://dev.to/shimo4228/moving-my-research-pipelines-judgment-calls-from-an-llm-to-jev-a-judgment-only-model-4ncj)）。毎朝のリサーチの判定役に Jev を置いた話です。コードは [jev-research-pipeline](https://github.com/shimo4228/jev-research-pipeline) にあります。
 
 エージェントの作り方、エージェントが失敗したとき誰が責任を持つか、AI 時代の著者性といった、著者のほかの仕事の入口は [github.com/shimo4228](https://github.com/shimo4228) です。新しい実験は、まずそこに並びます。記事の一覧は [Zenn](https://zenn.dev/shimo4228)（日本語）と [Dev.to](https://dev.to/shimo4228)（英語）にあります。
