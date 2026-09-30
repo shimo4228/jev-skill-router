@@ -144,8 +144,15 @@ sessions (cron, launchd, `claude -p`) are routed like interactive ones unless th
 
 The endpoint host is pinned: `TYPESAFE_BASE_URL` may change the path or point at a loopback stub
 (plain `http://` is allowed only there), but any other host is refused before the key is
-attached — one environment variable cannot redirect the key and the prompt elsewhere. A 30x answer is refused
-instead of followed, so the key is never re-sent to a redirect target.
+attached, so `TYPESAFE_BASE_URL` cannot move the key or the prompt to another host. A 30x answer
+is refused instead of followed, so the key is never re-sent to a redirect target.
+
+The pin does not defend against whoever controls the hook's environment. `PATH` chooses which
+`python3` runs, `PYTHONPATH` can load code into the hook process that holds the key, and
+`HTTPS_PROXY` together with `SSL_CERT_FILE` reaches the request as it does for any Python HTTPS
+client. Proxy support is kept on purpose, for corporate networks. In a project whose environment
+you do not trust (its direnv, for instance), disable the plugin: `JEV_ROUTER=off` is itself an
+environment variable that such an environment can override.
 
 ## Reading the log
 

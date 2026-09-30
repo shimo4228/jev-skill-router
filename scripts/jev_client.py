@@ -125,8 +125,14 @@ def check_endpoint(url: str) -> None:
 
     ``base_url`` comes from ``TYPESAFE_BASE_URL``, and every request carries the API key in
     an ``Authorization`` header plus the user's whole prompt in the body. Without this,
-    anything able to set one environment variable on an unattended hook — a project's
-    direnv, for instance — redirects both to a host of its choosing.
+    the one variable documented as moving the endpoint would also move both to any host.
+
+    Scope: this stops ``TYPESAFE_BASE_URL`` from being a redirect knob. It is not a defence
+    against whoever controls the hook's environment — ``PATH`` picks the interpreter,
+    ``PYTHONPATH`` runs code in this process, and ``_OPENER`` keeps urllib's env proxy
+    handling and the default SSL context, so ``HTTPS_PROXY`` plus ``SSL_CERT_FILE`` apply.
+    Proxy support is deliberate (corporate networks); the manual tells users of an
+    untrusted environment to disable the plugin.
 
     Both halves are needed, and the scheme alone is not enough: ``https://attacker.example``
     is perfectly encrypted, to the attacker. So the **host** is pinned to the real API or to
