@@ -9,7 +9,7 @@
     {
       "name": "jev-skill-router",
       "source": "./",
-      "description": "Asks TypeSafe Jev which installed skill fits the prompt and, in shadow mode, logs the answer instead of speaking it."
+      "description": "Asks TypeSafe Jev which installed skill fits the prompt and, in shadow mode, logs the answer instead of speaking it. Experiment concluded; kept as a reference implementation."
     }
   ]
 }

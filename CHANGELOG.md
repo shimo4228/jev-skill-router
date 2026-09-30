@@ -22,6 +22,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Documentation
 
+- The README is rewritten for people building with Jev, the main readers who arrive from the
+  awesome-jev lists. It opens with the week's result and the author's removal of the router,
+  adds a table of the pieces that carry over to other Jev builds and a section on
+  jev-research-pipeline as the fixed-pipeline counterpart, and narrows four claims to what the
+  code enforces: the key's destination (loopback stubs allowed), what `question_hash` covers
+  (not the per-candidate fit question), that proxy variables still apply, and that the prompt
+  can itself be agent-written text. The plugin and marketplace descriptions say the experiment
+  has concluded. The log-reading guidance moved to `evals/README.md`.
 - The README said the author keeps the router running in shadow mode. The author removed it
   from their own setup on 2026-09-28 after reading a week of the log, and the README now says
   so, with the numbers and a link to the article.

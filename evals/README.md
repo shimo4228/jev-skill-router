@@ -2,7 +2,7 @@
 
 The router logs what Jev picked. It does not log what the session did next. `shadow_join.py` joins the two, so you can see how often a suggested skill was actually called.
 
-The author ran the router in shadow mode for a week, read the join, and removed the router from their own setup. The story is in the article ["Is There Any Point to This?" Removing the Jev Plugins I Added to Claude Code After One Week](https://dev.to/shimo4228/is-there-any-point-to-this-removing-the-jev-plugins-i-added-to-claude-code-after-one-week-49eh) ([Japanese](https://zenn.dev/shimo4228/articles/jev-guard-blind-to-local-verify)). This page holds the method and the numbers behind it.
+I ran the router in shadow mode for a week, read the join, and removed the router from my own setup. The story is in the article ["Is There Any Point to This?" Removing the Jev Plugins I Added to Claude Code After One Week](https://dev.to/shimo4228/is-there-any-point-to-this-removing-the-jev-plugins-i-added-to-claude-code-after-one-week-49eh) ([Japanese](https://zenn.dev/shimo4228/articles/jev-guard-blind-to-local-verify)). This page holds the method and the numbers behind it.
 
 ## Run it on your own log
 
@@ -51,7 +51,11 @@ Rows that differ in `judges` come from a different judge, and rows in `inject` m
 
 The script counts. It cannot tell whether an unused suggestion was sensible. For that, draw a sample and read it.
 
-## The author's week
+## What would argue for inject
+
+Three counts matter: suggested and used, suggested but unused, and used but not suggested. The script prints the first two and the number of Skill calls. The case for `inject` rests on the second, narrowed to sensible suggestions on turns that used no other skill: those are the turns where a one-line pointer could have helped. Only reading a sample can do that narrowing. A missing log means unmeasured, not zero suggestions.
+
+## My week
 
 The log covers 2026-09-21 to 2026-09-28, with `jev-1.13.0`, a roster of 52 to 66 skills, and prompts in Japanese. The first 1,242 rows are the week up to the moment the router was turned off. All of them are in shadow mode. The numbers below were produced on 2026-09-29 with:
 
@@ -79,7 +83,7 @@ Input per decision averaged about 22,000 tokens over the 1,030 rows that recorde
 
 ## Reading 20 unused suggestions
 
-A count cannot say whether an unused suggestion was a miss by Claude Code or a wrong pick by Jev. After removing the router, the author drew 20 unused suggestions and read each conversation. The draw was made on the main sessions alone, from 508 unused suggestions:
+A count cannot say whether an unused suggestion was a miss by Claude Code or a wrong pick by Jev. After removing the router, I drew 20 unused suggestions and read each conversation. The draw was made on the main sessions alone, from 508 unused suggestions:
 
 ```bash
 python3 evals/shadow_join.py --limit 1242 --sample 20 --seed 20260929

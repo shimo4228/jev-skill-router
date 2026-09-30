@@ -2,67 +2,63 @@
 
 # jev-skill-router
 
-インストール済みの skill のうちどれがプロンプトに合うかを、TypeSafe の高速な確率モデル Jev に尋ね、その答えをログに残す Claude Code の hook です。答えを Claude に伝えるのは、そう設定したときだけです。実験として公開しています。動かした結果、強いモデルの router としては役に立つ見込みが小さいと分かり、その理由をこの README に書いています。
+Jev を skill の router として Claude Code に足すと、何が起きるか。そのコードとログと、外すことで終わった 1 週間の記録です。
 
 [![tests](https://github.com/shimo4228/jev-skill-router/actions/workflows/tests.yml/badge.svg)](https://github.com/shimo4228/jev-skill-router/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![status: experiment concluded](https://img.shields.io/badge/status-experiment%20concluded-lightgrey.svg)](#1-週間で分かったこと)
 
 <p align="center">
   <img src="assets/overview.ja.svg" width="760" alt="しくみを 4 つの枠で示した図。あなたがプロンプトを入力すると、Jev がどの skill が合うかを見立てる（例: adr-writer が 93%）。shadow モードでは見立てを記録するだけで、inject モードでは Claude に 1 行のヒントも渡す。その下で、Claude は変わらず全 skill を見て、最後に自分で選ぶ。">
 </p>
 
-jev-skill-router は、skill を何十本も入れていて、合う skill をモデルが使わずに済ませてしまうことがある人のための Claude Code プラグインです。プロンプトを送るたびに `UserPromptSubmit` hook が、プロンプトと skill の名簿を [TypeSafe](https://typesafe.ai) の Jev モデルへ送ります。Jev は文章を書かず、答えの決まった質問（Yes/No や、一覧から 1 つ選ぶ質問）に確率で答えるモデルです。その確率をコードが読み、skill を最大 1 本だけ名指しするか、何も名指ししません。最後に選ぶのは、変わらず全 skill を見ている Claude です。Python 3.10 以上、標準ライブラリのみ、MIT ライセンス、バージョン 0.2.0 で、まだ実験段階です。
+jev-skill-router は、[TypeSafe](https://typesafe.ai) の Jev で何かを作る人のための参照実装です。Jev は文章を書かず、型の決まった質問に確率で答えるモデルです。このリポジトリの本体は Claude Code の hook で、プロンプトのたびに、インストール済みのどの skill が合うかを Jev に尋ねてログに残します。既定の shadow モードではそこまでで、inject モードにすると Claude に 1 行のヒントも渡します。そのログを、Claude Code が実際に次に何をしたかと突き合わせるスクリプトも同梱しています。Python 3.10 以上、標準ライブラリのみ、MIT ライセンス、バージョン 0.2.0 で、有料の TypeSafe API key が必要です。
 
-**インストールの前に読んでください。** 公開しているのは、動く参考実装と計測器としてです。同じことを考える人が、私たちが確かめたところから始められるようにするためです。既定は **shadow モード**で、提案するとしたら選んでいた skill を記録するだけで、何も注入しません。そのログを、各セッションで実際に使った skill と突き合わせられます。動かして分かったことと、Claude Code の skill 一覧を書き換える手前で止めた理由は、記事「[JevのスキルルーターをClaude Codeに足して、スキル一覧を書き換える手前で引き返した](https://zenn.dev/shimo4228/articles/jev-retrofit-limits)」（[英語版](https://dev.to/shimo4228/i-added-jevs-skill-router-to-claude-code-and-turned-back-just-before-rewriting-the-skill-listing-34in)）に書きました。Jev を使ったほかの実験は「[著者のほかの仕事](#著者のほかの仕事)」にあります。
+私はこれを 1 週間動かし、自分の環境から外しました。539 回の提案のうち、提案した skill がその後に呼ばれたのは 28 回でした。次の一手を自分で決めるエージェントの中では、router が何を変えたのかを読み取れませんでした。その反省から作ったのが、コードがループを持ち、Jev は判定だけをする [jev-research-pipeline](https://github.com/shimo4228/jev-research-pipeline) です（[後述](#対になる実装-jev-research-pipeline)）。この README には、ほかの Jev の実装に持ち出せる部品と、全体としてはここで効かなかった理由を残しています。経緯の全体は記事「[「これ意味あるかな？」Claude Codeに入れたJevのプラグインを1週間で外すまで](https://zenn.dev/shimo4228/articles/jev-guard-blind-to-local-verify)」（[英語版](https://dev.to/shimo4228/is-there-any-point-to-this-removing-the-jev-plugins-i-added-to-claude-code-after-one-week-49eh)）に書きました。Jev を使ったほかの実験は「[著者のほかの仕事](#著者のほかの仕事)」にあります。
 
-## 動かして分かったこと
+## 1 週間で分かったこと
 
-**Claude Code 自身の skill 選択は、置き換えられません。** `UserPromptSubmit` hook にできるのは、ターンに文章を足すこと（とプロンプトを止めること）で、skill 一覧は変えられません。Claude Code は引き続き全 skill の説明（description）をモデルに見せ、選ぶのはモデルです。router はその横で並走します。skill 一覧に使われるトークンは、1 つも減りません。
+**この router のようなプロンプトごとの hook は、ターンに 1 行を足せますが、skill 一覧は変えられません。** Claude Code は引き続き、全 skill の説明（description）を 1 本あたり 1,536 文字までモデルに見せ（[skills の docs](https://code.claude.com/docs/ja/skills)、2026-10-01 確認）、選ぶのはモデルです。router は、同じ説明をすでに読んでいる強いモデルに、より弱い判定器（[Opus と比べた測定](https://zenn.dev/shimo4228/articles/jev-vs-opus-skill-selection)）が出す二つ目の意見になります。移植元の TypeSafe の [skill suggestion cookbook](https://docs.typesafe.ai/cookbooks/skill_suggestion)（英語）は、違う条件で測られています。そのエージェントは `claude-haiku-4-5` で、見えていたのは skill 1 本あたり 60 文字に切られた索引だったので、全文を読める別の読み手が足せるものがありました。
 
-**TypeSafe の手順の前提は、そのまま当てはまりません。** この router は、TypeSafe の [skill suggestion cookbook](https://docs.typesafe.ai/cookbooks/skill_suggestion) を移植したものです。TypeSafe の実験では、agent は `claude-haiku-4-5` で、見えていたのは skill 1 本あたり 60 文字に切られた索引でした。だから、全文を読める別の読み手が足せるものがありました。Claude Code は、各 skill の説明を 1,536 文字までモデルに見せます（[skills の docs](https://code.claude.com/docs/en/skills)、2026-09-21 確認）。ここでは router は、同じ説明をすでに見ている強いモデルに、より弱い判定器（[Opus と比べた測定](https://zenn.dev/shimo4228/articles/jev-vs-opus-skill-selection)）が助言する形になります。router が足せる情報は、`SKILL.md` の本文と、1,536 文字の上限を超えた説明の残りです。
+**用意した依頼文ではうまくいき、実際のセッションではうまくいきませんでした。** 「この設計判断を ADR として記録したい」のような意図が 1 つの依頼文 6 件は、0.2.0 ですべて妥当な答えでした（2026-09-21）。そのあと 2026-09-21 から 2026-09-28 までの 1 週間、私自身の 52〜66 本の skill の名簿、`jev-1.13.0`、日本語のプロンプトで、shadow モードのまま動かしました。
 
-**測ったこと**（すべて 2026-09-21、著者自身の名簿 50〜59 本、`jev-1.13.0`、プロンプトは日本語。名簿のうち著者が自作した skill は [claude-harness](https://github.com/shimo4228/claude-harness) で公開しています）:
+| 件数 | 値 |
+|---|---|
+| 判定 | 1,242 |
+| 提案 | 539 |
+| 提案した skill が、同じセッションで 30 分以内に呼ばれた | 28（約 5%） |
 
-- 意図が 1 つの依頼文（「この設計判断を ADR として記録したい」など）を用意して流した場合: 0.2.0 で 6 件中 6 件が妥当でした。5 件は人が選ぶであろう skill を、適合度（その skill が頼まれた具体的なことをする、と Jev が答えた確率）0.93〜0.98 で名指しし、お礼の一言には正しく何も提案しませんでした。
-- 著者の実際のセッション（0.1.0、shadow モード）: 6 件中 3 件が妥当、3 件が外れでした。外れたのは、会話の途中の受け答え（「なぜそのガードを入れたのか」など）で、著者自身のセッションの大半はこういう発話です。router の最初の関門（gate）は、点数が 0.30 未満ならそこで止まります。この 3 件には 0.34〜0.64 と、skill が要るかのような点を付けました。3 件とも、Jev が選んだ 1 本と、適合度が最も高い候補も食い違っていました（「判定のしかた」を見てください）。
-- 実セッションの 6 行は逸話であって、率ではありません。それでも載せるのは、このプロジェクトが持っている実セッションのデータが、これだけだからです。この 6 行は、切り詰めた文章で順位付けしていた 0.1.0 のものです。実セッションは 0.2.0 では取り直していません。版の違うログの行は混ぜずに分けて読むので、ここでも分けて書いています。
+外したあとで、使われなかった提案から無作為に 20 件を選んで読みました。13 件は的外れで、そのうち少なくとも 6 件は、エージェントが書いた文（サブエージェントへの依頼や、サブエージェントからの報告）に反応していました。こうした文も、あなたが打つ発言と同じ入口から hook に届きます。5 件は話題は近いものの、skill の要らないターンでした。1 件は、Claude Code が skill を呼ばずにそのファイルを直接読んでいました。Claude Code の見落としだったかもしれないのは 1 件です。スクリプトと使ったオプション、数字の全体は [evals/](evals/README.md)（英語）にあります。
 
-**それでも役に立つかもしれない場面。** モデルが skill を使わない理由が、「間違った skill を選ぶ」ことではなく「skill を読まずに自分でやってしまう」ことにあるなら、ターンごとの名指しは、情報としてではなく、きっかけとして働きます。shadow のログをセッション記録と突き合わせれば、この 2 つを見分けられます（「自分のログを読む」を見てください）。探す傾向は、提案は妥当だったのに、そのターンでは skill が 1 つも使われなかった、というものです。
+**そこで止めた理由。** 28 という数には、Jev の選び方、Claude Code の次の一手の決め方、私の数え方の 3 つが混ざっています。次の一手を自分で決めるエージェントでは、1 行を足すだけでその後の動きが変わりえて、ログからはこの 3 つを分けられず、router が気づかないうちに性能を落としていないかも分かりません。手順をコードで固定したパイプラインなら、1 つの手順を Jev の判定に差し替えてもほかは変わらないので、その効果を読めます。
 
-**shadow のまま 1 週間動かしても、その傾向は見えませんでした。著者は 2026-09-28 に、自分の環境から router を外しました。** 判定 1,242 回のうち提案は 539 回で、提案から 30 分以内にその skill が呼ばれたのは 28 回、約 5% でした（サブエージェントの中での呼び出しを除くと 26 回）。その後、使われなかった提案から 20 件を読みました。13 件は的外れで、Claude Code の見落としだったかもしれないのは 1 件でした。script と数字は [evals/](evals/README.md)（英語）にあります。経緯は記事「[「これ意味あるかな？」Claude Codeに入れたJevのプラグインを1週間で外すまで](https://zenn.dev/shimo4228/articles/jev-guard-blind-to-local-verify)」（[英語版](https://dev.to/shimo4228/is-there-any-point-to-this-removing-the-jev-plugins-i-added-to-claude-code-after-one-week-49eh)）に書きました。
+## 対になる実装: jev-research-pipeline
 
-**モデルに見せるもの自体を変えたいなら、この道具ではありません。** 各 skill の frontmatter を書き換える方法のほかに、それができる仕組みが 2 つあり、このプロジェクトはどちらも使っていません。
+[jev-research-pipeline](https://github.com/shimo4228/jev-research-pipeline) は、この router の最初の結果を受けて作り、使い続けている Jev の実装です。毎朝のリサーチを見張るパイプラインで、同じループを素の Python が毎回同じように回し、新しい論文やリポジトリが私の問いに答える助けになるかを Jev が判定し、LLM はノートを書く部分だけを担います。Jev の判定はループの決まった位置にあるので、どの判定を下し、その先で何が変わったかを見られます。この router が Claude Code の中では一度も見せられなかったものです。自分の実装のどこに Jev を置くかを考えているなら、2 つを並べて読んでください。部品と測り方はこのリポジトリに、効いた形はあちらにあります。経緯は記事「[LLMに任せていたリサーチの判定を、判定専用モデルJevに移す](https://zenn.dev/shimo4228/articles/jev-research-judgment-offload)」（[英語版](https://dev.to/shimo4228/moving-my-research-pipelines-judgment-calls-from-an-llm-to-jev-a-judgment-only-model-4ncj)）に書きました。
 
-- 公式の設定 `skillOverrides` は、skill をモデルに「名前と説明」「名前だけ」「見せない」のどれで載せるかを決められます（[skills の docs](https://code.claude.com/docs/en/skills)、値は `on` / `name-only` / `user-invocable-only` / `off`、2026-09-21 確認）。
-- Claude Code の early access 機能である function hooks（通称 mods、[設計スレッド](https://github.com/anthropics/claude-code/issues/91870)）を使うと、モデルが見る前に skill 一覧を書き換えられます（2026-09-21 に `anthropics/claude-code` の mod の型定義で確認）。
+## 持ち出せるもの
 
-2 つの仕組みを組み合わせた mod は、すでにあります。`davila7/claude-code-templates` の [jev-skill-suggestion](https://github.com/davila7/claude-code-templates/tree/main/cli-tool/components/mods/productivity/jev-skill-suggestion)（最初の commit は 2026-09-19）です。skill 一覧をモデルに読ませず、同じ cookbook の手順で Jev に最大 1 本を選ばせ、その skill の `SKILL.md` を添付し、`skillOverrides` で skill を隠します。その README によれば、一覧を差し替える hook は毎回同じ内容を返すので、モデルの prompt cache は保たれます。私たちは function hooks もこの mod も試しておらず、効くかどうかは分かりません。
+質問文と閾値は TypeSafe の cookbook から取っています。このリポジトリが足したのは、そのまわりの配管と、それを測る方法です。下の各行は、それぞれ自分の実装に持ち込める考え方を 1 つずつ指しています。出てくる Jev の質問の型は 2 つで、`choice` は一覧から 1 つを選び、`noul` は Yes/No の問いに確率で答えます。
 
-## インストール
-
-```
-/plugin marketplace add shimo4228/jev-skill-router
-/plugin install jev-skill-router@jev-skill-router
-```
-
-プラグインを有効にするとき、Claude Code が 3 つの設定を尋ねます。TypeSafe の API key（有料の API です。「制約」を見てください。[ここで作成](https://console.typesafe.ai/keys)。システムのキーチェーンに保存されます）、モード（既定は `shadow`）、任意のログの保存先です。モードの選択 UI には Claude Code 2.1.271 以上が必要です。それより古い版では、環境変数 `JEV_ROUTER` に `inject` か `off` を設定しない限り `shadow` のままです。key は環境変数 `TYPESAFE_API_KEY` で渡すことも、`~/.config/typesafe/api_key` に置くこともできます。環境変数で `JEV_ROUTER=off` を設定すると、そのプロセスだけ hook が止まります。無人で走るスクリプトを対象から外したいときに使います。
-
-プラグイン機構を使わずに動かす場合は、[運用マニュアル](skills/jev-skill-router/SKILL.md#install)の手動配線を見てください。
+| 作っているもの | 見る場所 | していること |
+|---|---|---|
+| Jev の API である System One の、依存なしのクライアント | [`scripts/jev_client.py`](scripts/jev_client.py) | 標準ライブラリだけで書いています。key の送り先は `api.typesafe.ai` だけで、例外はテスト用の loopback の代用サーバーです。ホストは固定し、リダイレクトは拒否します。再試行はしません。プロンプトの前で動く hook の持ち時間は数秒で、タイムアウトを再試行すれば同じ時間を二度使うからです。 |
+| 長い一覧からの選択 | [`scripts/router.py`](scripts/router.py) | 2 回のリクエストで尋ねます。名前と説明に対する広い `choice` と、上位 3 件の全文に対する狭い `choice`、それに候補ごとの `noul` です。240 件を超える一覧は、API の 255 択の上限に収まるよう分割します。 |
+| 版をまたいで比べられるログ | [`scripts/router.py`](scripts/router.py)（`question_hash`）、[`scripts/decision_log.py`](scripts/decision_log.py) | 各行に、モデル、router の版、質問の文言と全閾値のハッシュを残すので、質問や閾値を変えたあとの行は古い行と混ざりません。例外は候補ごとの適合度の質問で、まだハッシュに入っていません。プロンプトはハッシュと文字数だけを残します。 |
+| まだ信用できない判定 | [`scripts/route.py`](scripts/route.py) | shadow モードでは、切り離した子プロセスに仕事を渡してすぐに戻るので、誰も読まない判定を待つことはありません。失敗はすべて exit 0 で終わります。 |
+| エージェントが実際にしたことの確認 | [`evals/shadow_join.py`](evals/shadow_join.py) | 判定のログを Claude Code のセッション記録と突き合わせ、提案のあとに呼び出しが続いた数を数えます。使われなかった提案から、再現できる無作為抽出を作り、1 件ずつ読めるようにします。 |
+| API を呼ばないテスト | [`tests/`](tests/) | Jev の答えはすべて台本どおりの代用品で、Claude Code が読む出力の形は golden ファイルで固定しています。 |
 
 ## 判定のしかた
 
-質問文と閾値は cookbook からそのまま取り、1 つのファイルに定数として置いています。ただし「説明を 60 文字に切る」索引は引き継いでいません。先頭だけで順位付けすると、Claude が既に見ているものより少ない情報で判断することになるので（「動かして分かったこと」を見てください）、ここでは何も切り詰めません。
+1. **Wide（全体）。** 1 回のリクエストで、名簿（インストール済みの skill）全体を、skill 名と説明の全文に対する `choice` で順位付けします。同じリクエストで、プロンプトそのものについて `noul` の質問を 3 つ尋ねます。ユーザーのシステムに対する操作か、専門家なら文書化された手順に従うか、文章だけで足りるか、の 3 つです。3 つ目の答えは、高いほど skill が要るという向きにそろえるため反転します。3 つの平均が gate で、0.30 未満ならここで止まり、2 回目のリクエストは使いません。
+2. **Narrow（絞り込み）。** 上位 3 件を、説明の全文と各 `SKILL.md` の本文全体つきで送り直します。Jev が `choice` で 1 本を選び、候補ごとに `noul` で 1 問答えます。「この skill は、頼まれた具体的なことをするか」です。この答えがその候補の適合度（fits）です。最も高い適合度が 0.30 未満なら、何も提案しません。そうでなければ Jev が選んだ 1 本を名指しします。ほかの候補の適合度のほうが高くても同じで、そのときはログの行に両方の名前が残ります。
 
-1. **Wide（全体）。** 1 回のリクエストで、名簿全体を skill 名と説明の全文で順位付けします（240 本を超える名簿は、240 本ごとに 1 リクエストに分けます）。同じリクエストで、プロンプトそのものについて Yes/No の質問を 3 つ尋ねます。ユーザーのシステムに対する操作か、専門家なら文書化された手順に従うか、文章だけで足りるか、の 3 つです。3 つ目の答えは、高いほど skill が要るという向きにそろえるため反転します。3 つの平均が gate で、0.30 未満ならここで止まります。skill は不要と判断し、2 回目のリクエストは使いません。
-2. **Narrow（絞り込み）。** 上位 3 件を、説明の全文と各 `SKILL.md` の本文全体つきで送り直します。Jev が 1 本を選び、候補ごとにもう 1 問答えます。「この skill は、頼まれた具体的なことをするか」です。この答えがその候補の適合度（fits）です。最も高い適合度が 0.30 未満なら、何も提案しません。そうでなければ Jev が選んだ 1 本を名指しします。ほかの候補の適合度のほうが高くても同じで、そのときはログの行に両方の名前が残ります。
+cookbook の「説明を 60 文字に切る」索引は引き継がず、何も切り詰めません。先頭だけで順位付けすると、Claude がすでに見ているものより少ない情報で判断することになるからです。名簿は、ユーザーの skill、有効になっているプラグインの skill、セッションの作業ディレクトリから git のルートまでにあるプロジェクトの skill から組み立てます。`disable-model-invocation: true` の skill は除きます。
 
-名簿は 3 か所から組み立てます。ユーザーの skill、設定で有効になっているプラグインの skill、そしてセッションの作業ディレクトリから git のルートまで（git のリポジトリの外では 24 階層上まで）に見つかるプロジェクトの skill です。`disable-model-invocation: true` の skill は除きます。この hook が足すのは下に示すブロック 1 つだけなので、Claude Code の skill 一覧に対する prompt cache には影響しません。
+## 1 回の判定のログ
 
-失敗はすべて exit 0 で終わります。key が無い、タイムアウトした、API がエラーを返した、いずれの場合もログが 1 行増えるだけで、ターンは止まりません。`shadow` モードでは、hook は切り離した子プロセスに仕事を渡してすぐに戻るので、ターンは遅れません。`inject` モードは答えを待つ必要があり、全リクエストを合わせて 3 秒の上限の中で動きます。0.2.0 で行った実際の判定 6 回（2026-09-21）は、0.7〜1.6 秒でした。
-
-## 1 回の判定はこう見えます
-
-`off` 以外のモードでは、プロンプトごとに JSON を 1 行、プラグインのデータディレクトリにある `decisions.jsonl` へ追記します。次の行は `jev-1.13.0` に対する実際の呼び出し（`inject` モード）のものです。プロンプトは日本語で、設計判断を ADR として記録したい、という内容でした。`gate` は手順 1 の平均、`fits` は手順 2 の候補ごとの答えで、どちらも 0.30 を超えたので skill が名指しされました。行は一部を省略しています。
+`off` 以外のモードでは、プロンプトごとに JSON を 1 行、プラグインのデータディレクトリにある `decisions.jsonl` へ追記します。次の行は `jev-1.13.0` に対する実際の呼び出し（`inject` モード）のものです。プロンプトは日本語で、設計判断を ADR として記録したい、という内容でした。`gate` は手順 1 の平均、`fits` は手順 2 の答えで、どちらも 0.30 を超えたので skill が名指しされました。行は一部を省略しています。
 
 ```json
 {"mode": "inject", "model": "jev-1.13.0", "router_version": "0.2.0",
@@ -75,7 +71,7 @@ jev-skill-router は、skill を何十本も入れていて、合う skill を�
  "elapsed_ms": 1567}
 ```
 
-プロンプトの本文はログに書きません。書くのはハッシュと文字数だけです（`prompt_sha` と `prompt_chars`。上の行では省略しています。`question_hash` は router の質問セットを識別するもので、プロンプトのハッシュではありません）。`shadow` モードでは、この 1 行がすべてです。`inject` モードでは、判定に加えて下のブロックがターンに足されます。どの skill も閾値を超えなければ、何も足しません。
+`shadow` モードでは、この 1 行がすべてです。`inject` モードでは、cookbook の文言そのままの下のブロックもターンに足されます。どの skill も閾値を超えなければ、何も足しません。
 
 ```
 <skill_relevance>
@@ -83,54 +79,63 @@ Relevant to the current request: adr-writer. Ignore this if it does not fit what
 </skill_relevance>
 ```
 
-## 外に送られるもの
+## 自分で動かす
 
-判定のたびに `api.typesafe.ai` へ送られるのは、プロンプトの全文、名簿にある全 skill の名前と説明の全文、そして上位 3 件に限り、**その `SKILL.md` の本文全体**です。非公開のプロジェクトの `.claude/skills/` にある skill の本文も含みます。会話の履歴とツールの出力は送りません。プロジェクトのほかのファイルも送りませんが、skill のリンクを通る場合だけは例外で、次の段落に書きます。
+いまもインストールして動かせます。shadow モードで始め、[evals/](evals/README.md)（英語）で自分のログを読んでから、Claude に伝えるかを決めてください。
 
-自分で書いたのではないリポジトリでは、`.claude/skills/` と、そこからリンクできるリポジトリ内のファイルも、判定のたびに送られうるものとして扱ってください。あなたが自分で置いて commit していない `.env` のようなファイルも含みます。仕組みは次のとおりです。あなた自身の `~/.claude/skills/` とプラグインの中では、skill のディレクトリが symlink ならそれをたどります。プロジェクトの `.claude/skills/` は、そのリポジトリを書いた人のものなので、プロジェクトの `SKILL.md` は、実体がそのリポジトリ（`.claude/` を置いたディレクトリ）の中にある場合だけ読みます。プロジェクトの skill から、リポジトリの外にある手元のマシンのほかのファイルへ張られたリンクが、読まれたり送られたりすることはありません。
+```
+/plugin marketplace add shimo4228/jev-skill-router
+/plugin install jev-skill-router@jev-skill-router
+```
 
-**プロンプトに貼り付けた secret は、そのまま送られます。** 除去する処理はありません。送信先のホストはコード内で固定し、リダイレクトは拒否するので、環境変数ひとつで key やプロンプトを別のマシンへ送らせることはできません。例外はテストとローカルの代用サーバーのためのものだけです。`TYPESAFE_BASE_URL` には loopback のアドレス（`localhost`、`127.0.0.1`、`::1`）を指定でき、そのときは key もプロンプトも、そのポートで待ち受けているものに届きます。
+プラグインを有効にするとき、Claude Code が 3 つの設定を尋ねます。TypeSafe の API key（[ここで作成](https://console.typesafe.ai/keys)。システムのキーチェーンに保存されます）、モード（既定は `shadow`）、任意のログの保存先です。モードの選択 UI には Claude Code 2.1.271 以上が必要です。それより古い版では、環境変数 `JEV_ROUTER` に `inject` か `off` を設定しない限り `shadow` のままです。key は環境変数 `TYPESAFE_API_KEY` で渡すことも、`~/.config/typesafe/api_key` に置くこともできます。`JEV_ROUTER=off` を設定すると、そのプロセスだけ hook が止まるので、無人で走るスクリプトを対象から外せます。プラグイン機構を使わずに配線するには、[運用マニュアル](skills/jev-skill-router/SKILL.md#install)（英語）を見てください。
 
-## 制約
+**費用と待ち時間。** 判定のたびに 1〜2 リクエストを使い、名簿が 240 本を超えると 240 本ごとに 1 リクエスト増えます。0.2.0 で skill 52〜59 本の名簿の場合（2026-09-21）、gate で止まったときの入力は約 10,000 トークン、両方の手順が走ったときは 21,600〜25,300 トークンでした。現在の料金は [TypeSafe の料金ページ](https://docs.typesafe.ai/models)（英語）で確認してください。shadow モードはターンを待たせません。`inject` モードは 3 秒の上限の中で答えを待ち、実際の判定 6 回は 0.7〜1.6 秒でした。
 
-- 閾値は cookbook の初期値です。ベンダーが英語の名簿と、より古いモデル版で測った値で、あなたの名簿や言語に合わせた較正はされていません。shadow モードはそのためにあります。
-- 提案を注入すると何かが良くなる、という証拠を、このリポジトリは持っていません。cookbook が報告しているのはベンダーの実験で、提案が「agent が正しくできていたターン」を壊した例も含まれています。その実験の条件は Claude Code とは違います（「動かして分かったこと」を見てください）。
-- ディスクに `SKILL.md` を持たない組み込みの skill と、`--add-dir` で追加したディレクトリ配下の skill は提案できません。
-- `/` で始まるプロンプトと 4000 文字を超えるプロンプトは対象外です。
-- Jev に送れる入力は、1 リクエスト最大 64k トークン、プロンプトと、候補を載せた最も長い質問の合計で 32k トークンです。これに届きうる入力が 2 つあります。極端に長い `SKILL.md` が 3 本同時に候補へ入った場合と、名簿が大きい場合です。手順 1 の質問は、1 つに最大 240 本ぶんの説明全文を載せます。送信前に大きさを見積もる処理は持ちません。API がエラーを返し、そのターンは提案なしで通り、ログの行に理由が残ります。
-- TypeSafe は有料の外部 API で、判定のたびに 1〜2 リクエストを使います。名簿が 240 本を超えると、240 本ごとに 1 リクエスト増えます。0.2.0 で、skill 52〜59 本の名簿の場合（2026-09-21）、手順 1 で止まったときの入力は約 10,000 トークン、両方の手順が走ったときは 21,600〜25,300 トークンでした。現在の料金と上限は [TypeSafe の料金ページ](https://docs.typesafe.ai/models)で確認してください。変わりうる値なので、この README には書いていません。
+### 外に送られるもの
 
-## 自分のログを読む
+判定のたびに `api.typesafe.ai` へ送られるのは、プロンプトの全文、名簿にある全 skill の名前と説明の全文、そして上位 3 件に限り、**その `SKILL.md` の本文全体**です。非公開のプロジェクトの `.claude/skills/` にある skill の本文も含みます。hook は会話の履歴もツールの出力も集めません。ただし、hook が読むプロンプトそのものが、サブエージェントの報告のようにエージェントが書いた文で、ツールの結果を引用していることがあります。**プロンプトに貼り付けた秘密情報は、そのまま送られます。** 取り除く処理はありません。
 
-`model`、`router_version`、`question_hash` のいずれかが違う行は、別の判定器が出したものなので、分けて読んでください。`inject` を有効にする価値があるかは、ログを `session` と時刻で、各セッションが実際に使った skill と突き合わせ（router はそれを記録しません。Claude Code のセッション記録 `~/.claude/projects/` に、Skill ツールの呼び出しがすべて残ります）、3 つの件数を読んで決めます。提案して使われた、提案したが使われなかった、使われたが提案しなかった、の 3 つです。`inject` を支持するのは 2 つ目のうち、提案が妥当で、そのターンでほかの skill も使われなかったものです。後押しが効いたかもしれないのは、そういうターンだからです。ログが無いことは「未測定」を意味し、「提案ゼロ」ではありません。
+自分で書いたのではないリポジトリでは、`.claude/skills/` と、そこからリンクできるリポジトリ内のファイルも、判定のたびに送られうるものとして扱ってください。あなたが自分で置いて commit していない `.env` のようなファイルも含みます。あなた自身の `~/.claude/skills/` とプラグインの中では symlink の skill をたどりますが、プロジェクトの `SKILL.md` は、実体がそのリポジトリの中にある場合だけ読みます。プロジェクトの skill から手元のマシンのほかの場所へ張られたリンクが、読まれたり送られたりすることはありません。`TYPESAFE_BASE_URL` で key やプロンプトを別のホストへ向けることはできず、指定できるのはテストとローカルの代用サーバーのための loopback のアドレス（`localhost`、`127.0.0.1`、`::1`）だけです。`HTTPS_PROXY` のような標準のプロキシ変数は、ほかの Python の HTTPS クライアントと同じく効きます。
 
-`python3 evals/shadow_join.py` が、この突き合わせをして、最初の 2 つの件数と Skill の呼び出し数を出します。提案が妥当だったかは数えられないので、使われなかった提案を無作為に抜き出し、1 件ずつ読んで判断します。使い方と、著者自身の 1 週間の数字は [evals/](evals/README.md)（英語）にあります。
+### 制約
+
+- 閾値は cookbook の初期値です。ベンダーが英語の名簿と、より古いモデル版で測った値で、あなたの名簿や言語に合わせた較正はされていません。
+- 提案を注入すると何かが良くなる、という証拠を、このリポジトリは持っていません。
+- ディスクに `SKILL.md` を持たない組み込みの skill と、`--add-dir` で追加したディレクトリ配下の skill は提案できません。`/` で始まるプロンプトと 4,000 文字を超えるプロンプトは対象外です。
+- Jev に送れる入力は、1 リクエスト最大 64k トークン、プロンプトと最も長い質問の合計で 32k トークンです（[TypeSafe の models ページ](https://docs.typesafe.ai/models)（英語）、2026-09-21 確認）。極端に長い `SKILL.md` が 3 本そろった場合や、名簿が大きい場合はこれを超えることがあり、そのターンは提案なしで通り、ログの行に理由が残ります。
+
+すべてのモード、設定、ログの欄、対象外になる条件は[運用マニュアル](skills/jev-skill-router/SKILL.md)（英語）にあります。
 
 ## 関連する取り組み
 
-- 手順の出所は [TypeSafe の skill suggestion cookbook](https://docs.typesafe.ai/cookbooks/skill_suggestion) です。
-- [DECRUX9812/typesafe-skill-router](https://github.com/DECRUX9812/typesafe-skill-router) は、同じ cookbook を Hermes Agent 向けに実装しています。その文書から 2 つの知見を借りました。1 つの質問は 255 択が上限なので大きな名簿は分割すること、そして順位付けと候補ごとの適合判定が食い違う場合があることです。コードはコピーしていません。
-- Claude Code 向けの router はほかにもあります。たとえば [skillranker](https://github.com/Dicklesworthstone/skillranker) は、ローカルの履歴と較正コマンドを持つ Rust の CLI です。[typesafe-mod](https://github.com/BeLazy167/typesafe-mod) は、同じプロンプトごとの順位付けを function hooks の mod として行うもので、上に書いた限界も同じです。1 行を足すだけで、一覧には触りません。[jev-skill-suggestion](https://github.com/davila7/claude-code-templates/tree/main/cli-tool/components/mods/productivity/jev-skill-suggestion) はその先へ進み、一覧そのものを置き換えます（「動かして分かったこと」に書いたとおりです）。同じリポジトリには、モデルと effort を Jev で振り分ける [jev-model-router](https://github.com/davila7/claude-code-templates/tree/main/cli-tool/components/mods/productivity/jev-model-router) もあります。この router は `/plugin install` で入り、Python の標準ライブラリだけで動き（TypeSafe の API は必要です）、プラグインとプロジェクトの skill も名簿に含め、判定をすべて、Claude に伝える前にログに残します。
+- 手順の出所は [TypeSafe の skill suggestion cookbook](https://docs.typesafe.ai/cookbooks/skill_suggestion)（英語）です。
+- [DECRUX9812/typesafe-skill-router](https://github.com/DECRUX9812/typesafe-skill-router) は、同じ cookbook を Hermes Agent 向けに実装しています。その文書から 2 つの知見を借りました。1 つの質問は 255 択が上限であること、そして順位付けと候補ごとの適合判定が食い違う場合があることです。コードはコピーしていません。
+- Claude Code 向けの router はほかにもあります。[skillranker](https://github.com/Dicklesworthstone/skillranker) は、ローカルの履歴と較正を持つ Rust の CLI です。[typesafe-mod](https://github.com/BeLazy167/typesafe-mod) は、同じプロンプトごとの順位付けを function hooks の mod として行い、この router と同じく一覧には触りません。
+- 1 行を足すのでなく、モデルに見せるもの自体を変える仕組みが、skill 自身の frontmatter（`disable-model-invocation` など）のほかに 2 つあり、このプロジェクトはどちらも使っていません。公式の設定 `skillOverrides` は、skill を「名前と説明」「名前だけ」「見せない」のどれで載せるかを決められます（[skills の docs](https://code.claude.com/docs/ja/skills)、2026-10-01 確認）。Claude Code の早期アクセス機能である function hooks（通称 mods、[設計スレッド](https://github.com/anthropics/claude-code/issues/91870)）は、モデルが見る前に一覧を書き換えられます。[jev-skill-suggestion](https://github.com/davila7/claude-code-templates/tree/main/cli-tool/components/mods/productivity/jev-skill-suggestion) はこの 2 つを組み合わせ、一覧をモデルに読ませず、Jev に最大 1 本を選ばせて、その `SKILL.md` を添付します。私は試しておらず、効くかどうかは分かりません。
 
 ## 著者のほかの仕事
 
-Jev を使った実験は、この router も含めてどれも記事にしています（日本語は Zenn、英語は Dev.to）。
+Jev を使った実験は、どれも記事にしています（日本語は Zenn、英語は Dev.to）。このリポジトリについての記事は 2 本です。
 
-- 「[JevのスキルルーターをClaude Codeに足して、スキル一覧を書き換える手前で引き返した](https://zenn.dev/shimo4228/articles/jev-retrofit-limits)」（[英語版](https://dev.to/shimo4228/i-added-jevs-skill-router-to-claude-code-and-turned-back-just-before-rewriting-the-skill-listing-34in)）。このリポジトリの経緯です。プロンプトの hook で何が変えられたか、どこで引き返したか、判定モデルを自分のハーネスに足す前に確かめる 3 つのことを書きました。
+- 「[JevのスキルルーターをClaude Codeに足して、スキル一覧を書き換える手前で引き返した](https://zenn.dev/shimo4228/articles/jev-retrofit-limits)」（[英語版](https://dev.to/shimo4228/i-added-jevs-skill-router-to-claude-code-and-turned-back-just-before-rewriting-the-skill-listing-34in)）。作る話です。プロンプトの hook で何が変えられたか、どこで引き返したか、判定モデルを自分のハーネスに足す前に確かめる 3 つのことを書きました。
+- 「[「これ意味あるかな？」Claude Codeに入れたJevのプラグインを1週間で外すまで](https://zenn.dev/shimo4228/articles/jev-guard-blind-to-local-verify)」（[英語版](https://dev.to/shimo4228/is-there-any-point-to-this-removing-the-jev-plugins-i-added-to-claude-code-after-one-week-49eh)）。動かした話です。この router と、完了を止めるプラグインの 1 週間、2 つとも外した理由、判定モデルの効果が固定したパイプラインでは読めてエージェントのループでは読めない理由を書きました。
+
+Jev が効いた場所と、どこまで押し広げられるか:
+
+- 「[LLMに任せていたリサーチの判定を、判定専用モデルJevに移す](https://zenn.dev/shimo4228/articles/jev-research-judgment-offload)」（[英語版](https://dev.to/shimo4228/moving-my-research-pipelines-judgment-calls-from-an-llm-to-jev-a-judgment-only-model-4ncj)）。上で紹介した対になる実装、[jev-research-pipeline](https://github.com/shimo4228/jev-research-pipeline) の経緯です。
 - 「[文章を書かないモデルJevのスキル選択は、0.3秒でOpusにどこまで近づくか](https://zenn.dev/shimo4228/articles/jev-vs-opus-skill-selection)」（[英語版](https://dev.to/shimo4228/how-close-to-opus-does-jev-a-model-that-writes-no-text-get-at-skill-selection-in-03-seconds-1nfj)）。同じ 150 件の状況で、Jev と Claude Opus に skill を選ばせて比べました。Jev と Opus の一致は、Opus 同士の一致の約半分で、費用は約 560 分の 1 でした。
 - 「[Jevの判断をローカルで再現するには何が要るか](https://zenn.dev/shimo4228/articles/local-decision-model-conditions)」（[英語版](https://dev.to/shimo4228/what-does-it-take-to-reproduce-jevs-decisions-locally-3i0n)）。手元で動く 4 つのモデルに同じ 150 件を解かせ、4 つとも、それぞれ別の理由で Jev の水準に届きませんでした。
-- 「[「これ意味あるかな？」Claude Codeに入れたJevのプラグインを1週間で外すまで](https://zenn.dev/shimo4228/articles/jev-guard-blind-to-local-verify)」（[英語版](https://dev.to/shimo4228/is-there-any-point-to-this-removing-the-jev-plugins-i-added-to-claude-code-after-one-week-49eh)）。この router と、完了を止めるプラグインを Claude Code に入れた 1 週間の話です。2 つとも外した理由と、判定モデルの効果をどこでなら読めるかを書きました。数字は [evals/](evals/README.md)（英語）にあります。
-- 「[LLMに任せていたリサーチの判定を、判定専用モデルJevに移す](https://zenn.dev/shimo4228/articles/jev-research-judgment-offload)」（[英語版](https://dev.to/shimo4228/moving-my-research-pipelines-judgment-calls-from-an-llm-to-jev-a-judgment-only-model-4ncj)）。毎朝のリサーチの判定役に Jev を置いた話です。コードは [jev-research-pipeline](https://github.com/shimo4228/jev-research-pipeline) にあります。
 
-エージェントの作り方、エージェントが失敗したとき誰が責任を持つか、AI 時代の著者性といった、著者のほかの仕事の入口は [github.com/shimo4228](https://github.com/shimo4228) です。新しい実験は、まずそこに並びます。記事の一覧は [Zenn](https://zenn.dev/shimo4228)（日本語）と [Dev.to](https://dev.to/shimo4228)（英語）にあります。
+エージェントの作り方、エージェントが失敗したとき誰が責任を持つか、AI 時代の著者性といった、私のほかの仕事の入口は [github.com/shimo4228](https://github.com/shimo4228) です。新しい実験は、まずそこに並びます。この router を測った名簿の大半を占める、私が書いた skill は [claude-harness](https://github.com/shimo4228/claude-harness) で公開しています。記事の一覧は [Zenn](https://zenn.dev/shimo4228)（日本語）と [Dev.to](https://dev.to/shimo4228)（英語）にあります。
 
 ## 来歴
 
-このプロジェクトは TypeSafe AI とは無関係です。コードは、著者の指示のもとで Claude Code が書きました。オフラインのテスト（`uv run pytest -q`、ネットワーク不要）で検査しています。key とプロンプトが通る経路は、自動のレビュー（LLM の security review エージェントと、Claude Code 組み込みの code review）にかけました。その結果、HTTP リダイレクト時の key の漏えいと、信頼できない文字列がモデルの文脈に届く経路が見つかり、修正しています。第三者の人間による監査は受けていません。
+このプロジェクトは TypeSafe AI とは無関係です。コードは、私の指示のもとで Claude Code が書きました。オフラインのテスト（`uv run pytest -q`、ネットワーク不要）で検査しています。key とプロンプトが通る経路は、自動のレビュー（LLM の security review エージェントと、Claude Code 組み込みの code review）にかけました。その結果、HTTP リダイレクト時の key の漏えいと、信頼できない文字列がモデルの文脈に届く経路が見つかり、修正しています。第三者の人間による監査は受けていません。
 
 ## 文書とライセンス
 
 - [運用マニュアル](skills/jev-skill-router/SKILL.md)（英語）: すべてのモード、設定、ログの欄、対象外になる条件
-- [Evals](evals/README.md)（英語）: ログとセッション記録を突き合わせる script と、著者の 1 週間の数字
-- [変更履歴](CHANGELOG.md)
+- [Evals](evals/README.md)（英語）: ログとセッション記録を突き合わせるスクリプトと、私の 1 週間の数字
+- [変更履歴](CHANGELOG.md)（英語）
 - ライセンス: [MIT](LICENSE)
