@@ -1,11 +1,6 @@
 ---
 name: jev-skill-router
-description: >
-  A Claude Code UserPromptSubmit hook that asks TypeSafe Jev which installed skill (user,
-  plugin or project) fits the prompt — two typed requests, at most one skill name back — and
-  either records the decision (shadow) or injects a one-line pointer (inject). Not invoked by
-  the model: it runs as a hook (plugin install, or one line in settings.json) and this file is
-  its operating manual.
+description: "Operating manual for the UserPromptSubmit hook that asks TypeSafe Jev which skill fits the prompt."
 origin: shimo4228
 replaces: >
   TypeSafe cookbook "Skill suggestion"
