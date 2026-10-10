@@ -130,6 +130,33 @@ if hits="$(grep -rEl "$SECRET_RE" "$STAGING" 2>/dev/null)"; then
   exit 1
 fi
 
+# --- root files must not link into skills/ paths the synced payload does not have ---
+# The sync replaces skills/<name>/ but never touches README / llms*.txt / CHANGELOG,
+# so a renamed or removed file inside a skill leaves those links dangling. Checked
+# before anything is applied, so dry-run reports it and apply aborts with the tree intact.
+python3 - "$TARGET_DIR" "$STAGING" <<'PYEOF' || exit 1
+import pathlib, re, sys, urllib.parse
+target, staging = map(pathlib.Path, sys.argv[1:3])
+link = re.compile(r"\]\(<?([^)\s>]+)|(?:href|src)=\"([^\"]+)\"")
+fence = re.compile(r"^(```|~~~).*?^\1", re.M | re.S)
+code = re.compile(r"`[^`\n]*`")
+docs = [*sorted(target.glob("README*.md")), *(target / n for n in ("llms.txt", "llms-full.txt", "CHANGELOG.md"))]
+bad = []
+for f in docs:
+    if not f.is_file():
+        continue
+    text = code.sub("", fence.sub("", f.read_text(encoding="utf-8")))
+    for m in link.finditer(text):
+        raw = (m.group(1) or m.group(2)).split("#", 1)[0]
+        path = urllib.parse.unquote(raw).removeprefix("./")
+        if path.startswith("skills/") and not (staging / path).exists():
+            bad.append(f"  {f.name}: {path}")
+if bad:
+    print("ABORT: root files link to skills/ paths the synced payload does not have:", file=sys.stderr)
+    print("\n".join(sorted(set(bad))), file=sys.stderr)
+    sys.exit(1)
+PYEOF
+
 # --- report / apply -------------------------------------------------------------------
 if (( DRY_RUN )); then
   echo "# DRY-RUN (origin: $ORIGIN, version: $ROUTER_VERSION) — staging vs $TARGET_DIR"
